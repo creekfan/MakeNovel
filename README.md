@@ -1,3 +1,4 @@
 ```bash
-python export_db.py [输出文件名]
+##启动
+在前端目录frontend下运行npm run dev
 ```
