@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+backend/.env
+
+# Database
+data/makenovel.db
+data/backups/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Export files
+*.txt
+
+# Dev tools
+nul
