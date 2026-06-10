@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Wand2, Save, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Wand2, Save, Loader2, ChevronRight, ChevronDown, Send, FileText } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -20,6 +20,7 @@ export default function SectionEditorPage() {
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [section, setSection] = useState<OutlineNode | null>(null);
   const [hierarchy, setHierarchy] = useState<{ title: string; id: number }[]>([]);
@@ -31,22 +32,36 @@ export default function SectionEditorPage() {
   const [activeCharIds, setActiveCharIds] = useState<number[]>([]);
   const [activeSettingIds, setActiveSettingIds] = useState<number[]>([]);
   const searchParams = useSearchParams();
+  const lastContentRef = useRef('');
 
   const editor = useEditor({
     extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } }), Placeholder.configure({ placeholder: '开始写作...' })],
     content: '', editorProps: { attributes: { class: 'tiptap prose prose-zinc dark:prose-invert max-w-none focus:outline-none min-h-[400px] px-4 py-3' } },
-    onUpdate: ({ editor: ed }) => { setWordCount(ed.getText().length); },
+    onUpdate: ({ editor: ed }) => {
+      setWordCount(ed.getText().length);
+      const html = ed.getHTML();
+      if (html !== lastContentRef.current) {
+        setIsDirty(true);
+      }
+    },
   });
 
   const [aiOpen, setAiOpen] = useState(false);
   const [aiActions, setAiActions] = useState<AIAction[]>([]);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiOutput, setAiOutput] = useState('');
+  const [aiReasoning, setAiReasoning] = useState('');
+  const [showReasoning, setShowReasoning] = useState(false);
+  const [aiUsage, setAiUsage] = useState<{ prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number } | null>(null);
   const [aiInstruction, setAiInstruction] = useState('');
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmAction, setConfirmAction] = useState<AIAction | null>(null);
   const [confirmText, setConfirmText] = useState('');
+  const [agentMode, setAgentMode] = useState(false);
+  const [agentMessage, setAgentMessage] = useState('');
+  const [agentSteps, setAgentSteps] = useState<string[]>([]);
+  const [summarizing, setSummarizing] = useState(false);
   const savedSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   useEffect(() => {
@@ -63,17 +78,6 @@ export default function SectionEditorPage() {
 
         const outlines = await api.listOutline(novelId);
 
-        const findNodeWithPath = (nodes: OutlineNode[], path: { title: string; id: number }[]): OutlineNode | null => {
-          for (const n of nodes) {
-            if (n.id === sectionId) return n;
-            if (n.children && n.children.length > 0) {
-              const found = findNodeWithPath(n.children, [...path, { title: n.title, id: n.id }]);
-              if (found) return found;
-            }
-          }
-          return null;
-        };
-
         const buildPath = (nodes: OutlineNode[], targetId: number, path: { title: string; id: number }[] = []): { title: string; id: number }[] | null => {
           for (const n of nodes) {
             if (n.id === targetId) return [...path, { title: n.title, id: n.id }];
@@ -85,16 +89,27 @@ export default function SectionEditorPage() {
           return null;
         };
 
-        const sec = findNodeWithPath(outlines, []);
+        const findNodeWithPath = (nodes: OutlineNode[]): OutlineNode | null => {
+          for (const n of nodes) {
+            if (n.id === sectionId) return n;
+            if (n.children && n.children.length > 0) {
+              const found = findNodeWithPath(n.children);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+
+        const sec = findNodeWithPath(outlines);
         const path = buildPath(outlines, sectionId);
         if (path) setHierarchy(path);
         if (!sec) { router.push(`/novel/${novelId}/outline`); return; }
 
         setSection(sec);
         setTitle(sec.title);
+        lastContentRef.current = sec.content || '';
         if (editor) editor.commands.setContent(sec.content || '');
 
-        // Find previous section's summary for write context
         const collectScenes = (nodes: OutlineNode[]): OutlineNode[] => {
           const result: OutlineNode[] = [];
           for (const n of nodes) {
@@ -105,8 +120,8 @@ export default function SectionEditorPage() {
         };
         const allScenes = collectScenes(outlines);
         const idx = allScenes.findIndex(s => s.id === sectionId);
-        if (idx > 0 && allScenes[idx - 1].notes) {
-          setPrevSummary(allScenes[idx - 1].notes);
+        if (idx > 0 && allScenes[idx - 1].summary) {
+          setPrevSummary(allScenes[idx - 1].summary);
         }
         setLoading(false);
       } catch { router.push(`/novel/${novelId}`); }
@@ -116,14 +131,25 @@ export default function SectionEditorPage() {
   useEffect(() => { api.listActions().then(setAiActions); }, []);
 
   const handleSave = useCallback(async () => {
-    if (!editor) return;
+    if (!editor || !isDirty) return;
     setSaving(true);
-    try { await api.updateOutlineNode(sectionId, { title, content: editor.getHTML() }); } catch {}
+    try {
+      await api.updateOutlineNode(sectionId, { title, content: editor.getHTML() });
+      lastContentRef.current = editor.getHTML();
+      setIsDirty(false);
+      const text = editor.getText();
+      if (text.length > 100) {
+        const creds = getCreds();
+        if (creds.apiKey) {
+          api.embedOutlineNode(sectionId, creds.provider, creds.model, creds.apiKey).catch(() => {});
+        }
+      }
+    } catch {}
     setSaving(false);
-  }, [editor, sectionId, title]);
+  }, [editor, sectionId, title, isDirty]);
 
   useEffect(() => { const h = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); handleSave(); } }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [handleSave]);
-  useEffect(() => { const i = setInterval(() => { if (editor && editor.getText().length > 0) handleSave(); }, 30000); return () => clearInterval(i); }, [handleSave, editor]);
+  useEffect(() => { const i = setInterval(() => { if (isDirty && editor && editor.getText().length > 0) handleSave(); }, 30000); return () => clearInterval(i); }, [handleSave, editor, isDirty]);
 
   const getCreds = () => ({
     provider: settingsStore.provider,
@@ -143,16 +169,28 @@ export default function SectionEditorPage() {
   const handleConfirmAI = async () => {
     if (!confirmAction || !editor) return;
     const action = confirmAction;
-    setShowConfirm(false); setActiveAction(action.action); setAiGenerating(true); setAiOutput('');
+    setShowConfirm(false); setActiveAction(action.action); setAiGenerating(true); setAiOutput(''); setAiReasoning(''); setAiUsage(null);
     const sel = savedSelectionRef.current;
     let selectedText = '';
     if (action.action === 'write') { selectedText = editor.getText(); }
-    else if (action.action === 'polish' && sel) { selectedText = editor.state.doc.textBetween(sel.from, sel.to); }
-    else if (action.action === 'rewrite' && sel) {
-      const selText = editor.state.doc.textBetween(sel.from, sel.to);
-      const beforeCtx = editor.state.doc.textBetween(Math.max(0, sel.from - 500), sel.from);
-      const afterCtx = editor.state.doc.textBetween(sel.to, Math.min(editor.state.doc.content.size, sel.to + 500));
-      selectedText = `【待改写内容】\n${selText}\n\n【上文】${beforeCtx || '（无）'}\n\n【下文】${afterCtx || '（无）'}`;
+    else if (action.action === 'polish') {
+      if (sel && sel.from !== sel.to) {
+        selectedText = editor.state.doc.textBetween(sel.from, sel.to);
+      } else {
+        selectedText = editor.getText();
+        savedSelectionRef.current = { from: 0, to: editor.state.doc.content.size };
+      }
+    }
+    else if (action.action === 'rewrite') {
+      if (sel && sel.from !== sel.to) {
+        const selText = editor.state.doc.textBetween(sel.from, sel.to);
+        const beforeCtx = editor.state.doc.textBetween(Math.max(0, sel.from - 500), sel.from);
+        const afterCtx = editor.state.doc.textBetween(sel.to, Math.min(editor.state.doc.content.size, sel.to + 500));
+        selectedText = `【待改写内容】\n${selText}\n\n【上文】${beforeCtx || '（无）'}\n\n【下文】${afterCtx || '（无）'}`;
+      } else {
+        selectedText = `【待改写内容】\n${editor.getText()}`;
+        savedSelectionRef.current = { from: 0, to: editor.state.doc.content.size };
+      }
     }
     else if (action.action === 'brainstorm') { selectedText = editor.getText(); }
     else if (action.action === 'summary') { selectedText = editor.getText(); }
@@ -161,10 +199,10 @@ export default function SectionEditorPage() {
       ? `【${section.title}】${section.summary || ''}${prevSummary ? '\n\n## 上一节摘要\n' + prevSummary : ''}${aiInstruction ? '\n\n补充要求：' + aiInstruction : ''}`
       : aiInstruction;
     try {
-      const response = await api.generateAI({ novel_id: novelId, action: action.action, selected_text: selectedText, instruction: writeInstruction, provider: creds.provider, model: creds.model, api_key: creds.apiKey, active_character_ids: activeCharIds, active_setting_ids: activeSettingIds });
+      const response = await api.generateAI({ novel_id: novelId, scene_id: sectionId, action: action.action, selected_text: selectedText, instruction: writeInstruction, provider: creds.provider, model: creds.model, api_key: creds.apiKey, active_character_ids: activeCharIds, active_setting_ids: activeSettingIds });
       const reader = response.body?.getReader(); const decoder = new TextDecoder();
       if (!reader) return;
-      while (true) { const { done, value } = await reader.read(); if (done) break; for (const line of decoder.decode(value, { stream: true }).split('\n')) { if (line.startsWith('data: ')) { const data = line.slice(6).trim(); if (data === '[DONE]') break; try { setAiOutput((p) => p + (JSON.parse(data).token || '')); } catch {} } } }
+      while (true) { const { done, value } = await reader.read(); if (done) break; for (const line of decoder.decode(value, { stream: true }).split('\n')) { if (line.startsWith('data: ')) { const data = line.slice(6).trim(); if (data === '[DONE]') break; try { const parsed = JSON.parse(data); if (parsed.reasoning) setAiReasoning(p => p + parsed.reasoning); else if (parsed.usage) setAiUsage(parsed); else if (parsed.token) setAiOutput(p => p + parsed.token); } catch {} } } }
     } catch (e) { setAiOutput(`[AI 调用出错: ${(e as Error).message}]`); }
     setAiGenerating(false);
   };
@@ -172,17 +210,22 @@ export default function SectionEditorPage() {
   const handleInsertAIText = () => {
     if (!editor || !aiOutput) return;
     const sel = savedSelectionRef.current;
-    if ((activeAction === 'polish' || activeAction === 'rewrite') && sel && sel.from !== sel.to) { editor.chain().focus().setTextSelection({ from: sel.from, to: sel.to }).deleteSelection().insertContent(aiOutput).run(); }
-    else if (sel) { editor.chain().focus().setTextSelection(sel.from).insertContent(aiOutput).run(); }
-    else { editor.chain().focus().insertContent(aiOutput).run(); }
-    setAiOutput(''); setActiveAction(null); setAiInstruction(''); savedSelectionRef.current = null;
+    if ((activeAction === 'polish' || activeAction === 'rewrite') && sel && sel.from !== sel.to) {
+      editor.chain().focus().setTextSelection({ from: sel.from, to: sel.to }).deleteSelection().insertContent(aiOutput).run();
+    } else if ((activeAction === 'polish' || activeAction === 'rewrite') && sel && sel.from === 0 && sel.to >= editor.state.doc.content.size - 10) {
+      editor.chain().focus().selectAll().deleteSelection().insertContent(aiOutput).run();
+    } else if (sel) {
+      editor.chain().focus().setTextSelection(sel.from).insertContent(aiOutput).run();
+    } else {
+      editor.chain().focus().insertContent(aiOutput).run();
+    }
+    setAiOutput(''); setActiveAction(null); setAiInstruction(''); setAiReasoning(''); setAiUsage(null); savedSelectionRef.current = null;
   };
 
   const handleSaveSummary = async () => {
     if (!aiOutput) return;
-    await api.updateOutlineNode(sectionId, { notes: aiOutput.trim() });
-    setAiOutput(''); setActiveAction(null); setAiInstruction('');
-    // Reload section data
+    await api.updateOutlineNode(sectionId, { summary: aiOutput.trim() });
+    setAiOutput(''); setActiveAction(null); setAiInstruction(''); setAiReasoning(''); setAiUsage(null);
     const outlines = await api.listOutline(novelId);
     const findNode = (nodes: OutlineNode[]): OutlineNode | null => {
       for (const n of nodes) { if (n.id === sectionId) return n; if (n.children) { const f = findNode(n.children); if (f) return f; } }
@@ -192,9 +235,72 @@ export default function SectionEditorPage() {
     if (s) setSection(s);
   };
 
-  const checkDisabled = (a: AIAction) => aiGenerating || (a.requires_text && editor?.state.selection.empty);
+  const handleSummarize = async () => {
+    if (!editor) return;
+    const creds = getCreds();
+    if (!creds.apiKey) { alert('请先配置 API Key'); return; }
+    setSummarizing(true);
+    try {
+      const result = await api.summarizeOutlineNode(sectionId, creds.provider, creds.model, creds.apiKey);
+      if (result.ok && result.summary) {
+        setSection(prev => prev ? { ...prev, summary: result.summary! } : prev);
+        alert('摘要已生成');
+      } else {
+        alert('摘要生成失败');
+      }
+    } catch (e) { alert(`摘要生成失败: ${(e as Error).message}`); }
+    setSummarizing(false);
+  };
+
+  const handleAgentSend = async () => {
+    const msg = agentMessage.trim();
+    if (!msg || aiGenerating) return;
+    setAgentMessage('');
+    setAiGenerating(true);
+    setAiOutput('');
+    setAiReasoning('');
+    setAiUsage(null);
+    setAgentSteps([]);
+    const creds = getCreds();
+    try {
+      const resp = await fetch('/api/ai/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ novel_id: novelId, message: msg, provider: creds.provider, model: creds.model, api_key: creds.apiKey }),
+      });
+      const reader = resp.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) return;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') break;
+          try {
+            const evt = JSON.parse(data);
+            if (evt.type === 'tool_call') setAgentSteps(p => [...p, `🔧 ${evt.tool}`]);
+            else if (evt.type === 'thinking') setAgentSteps(p => [...p, `💭 ${evt.content}`]);
+            else if (evt.type === 'tool_result') setAgentSteps(p => [...p, `   ↳ ${evt.content?.slice(0, 80)}...`]);
+            else if (evt.type === 'final') setAiOutput(evt.content);
+            else if (evt.type === 'usage') setAiUsage(evt);
+          } catch {}
+        }
+      }
+    } catch (e) { setAiOutput(`[Agent 出错: ${(e as Error).message}]`); }
+    setAiGenerating(false);
+  };
+
+  const checkDisabled = (a: AIAction) => aiGenerating || (a.requires_text && !editor?.getText().length);
 
   if (loading) return <div className="p-8 text-zinc-500">加载中...</div>;
+
+  const formatCost = (cost?: number) => {
+    if (cost === undefined || cost === null) return '';
+    if (cost >= 0.01) return `$${cost.toFixed(4)}`;
+    return `$${cost.toFixed(6)}`;
+  };
 
   return (
     <div className="flex h-[calc(100vh-0px)]">
@@ -209,9 +315,11 @@ export default function SectionEditorPage() {
               </span>
             ))}
           </div>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className="text-base font-semibold bg-transparent text-zinc-900 dark:text-zinc-100 outline-none min-w-0" placeholder="节标题" />
+          <input value={title} onChange={(e) => { setTitle(e.target.value); setIsDirty(true); }} className="text-base font-semibold bg-transparent text-zinc-900 dark:text-zinc-100 outline-none min-w-0" placeholder="节标题" />
           <span className="text-xs text-zinc-400 font-mono ml-auto shrink-0">{wordCount.toLocaleString()} 字</span>
-          <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 cursor-pointer shrink-0"><Save size={14} />{saving ? '...' : '保存'}</button>
+          {isDirty && <span className="text-[10px] text-amber-500">●</span>}
+          <button onClick={handleSave} disabled={saving || !isDirty} className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 cursor-pointer shrink-0"><Save size={14} />{saving ? '...' : '保存'}</button>
+          <button onClick={handleSummarize} disabled={summarizing || !editor?.getText().length} className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg cursor-pointer shrink-0 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50" title="AI 生成摘要"><FileText size={14} />{summarizing ? '...' : '摘要'}</button>
           <button onClick={() => setAiOpen(!aiOpen)} className={`flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg cursor-pointer shrink-0 ${aiOpen ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}><Wand2 size={14} />AI</button>
         </div>
 
@@ -228,7 +336,7 @@ export default function SectionEditorPage() {
             {contextExpanded && (
               <div className="flex gap-4 text-xs text-zinc-500 mt-1 pb-1 flex-wrap">
                 {section.summary && <span>情节：{section.summary.slice(0, 60)}{section.summary.length > 60 ? '…' : ''}</span>}
-                {section.notes && <span className="text-indigo-500">摘要：{section.notes.slice(0, 80)}{section.notes.length > 80 ? '…' : ''}</span>}
+                {section.notes && <span className="text-indigo-500">备注：{section.notes.slice(0, 80)}{section.notes.length > 80 ? '…' : ''}</span>}
                 {characters.length > 0 && <span>角色：{characters.slice(0, 3).map(c => c.name).join('、')}</span>}
                 {prevSummary && <span className="text-amber-500">← 上节：{prevSummary.slice(0, 60)}{prevSummary.length > 60 ? '…' : ''}</span>}
               </div>
@@ -280,7 +388,27 @@ export default function SectionEditorPage() {
 
       {aiOpen && (
         <div className="w-80 border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col shrink-0 overflow-hidden">
-          <div className="p-3 border-b"><h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">AI 写作助手</h3><p className="text-xs text-zinc-500 mt-0.5">{showConfirm ? '确认发送' : '大纲上下文已自动注入'}</p></div>
+          <div className="p-3 border-b">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">AI 写作助手</h3>
+              <button onClick={() => setAgentMode(!agentMode)} className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer ${agentMode ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700' : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-500'}`}>Agent</button>
+            </div>
+            <p className="text-xs text-zinc-500 mt-0.5">{showConfirm ? '确认发送' : agentMode ? '自然语言指令' : '大纲上下文已自动注入'}</p>
+          </div>
+
+          {agentMode && (
+            <div className="p-2 border-b border-zinc-200 dark:border-zinc-800">
+              <div className="flex gap-1">
+                <input value={agentMessage} onChange={e => setAgentMessage(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAgentSend(); }} placeholder="创作本节 / 完善对话 / 检查质量..." disabled={aiGenerating} className="flex-1 px-2 py-1 text-xs border rounded-lg bg-transparent text-zinc-900 dark:text-zinc-100 disabled:opacity-50" />
+                <button onClick={handleAgentSend} disabled={!agentMessage.trim() || aiGenerating} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"><Send size={12} /></button>
+              </div>
+              {agentSteps.length > 0 && (
+                <div className="mt-1.5 space-y-0.5 max-h-20 overflow-y-auto">
+                  {agentSteps.map((s, i) => <div key={i} className="text-[10px] text-zinc-500">{s}</div>)}
+                </div>
+              )}
+            </div>
+          )}
 
           {showConfirm && confirmAction ? (
             <div className="flex-1 overflow-auto p-3 space-y-3">
@@ -317,7 +445,7 @@ export default function SectionEditorPage() {
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-auto p-2 space-y-1">
+              <div className={`flex-1 overflow-auto p-2 space-y-1 ${agentMode ? 'hidden' : ''}`}>
                 {aiActions.map(a => (<button key={a.action} onClick={() => handleAIAction(a)} disabled={checkDisabled(a)}
                   className={`w-full text-left p-2.5 rounded-lg text-sm cursor-pointer ${activeAction === a.action ? 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-transparent'} disabled:opacity-40 disabled:cursor-not-allowed`}>
                   <div className="font-medium text-zinc-900 dark:text-zinc-100">{a.label}</div><div className="text-xs text-zinc-500 mt-0.5">{a.description}</div>
@@ -326,8 +454,17 @@ export default function SectionEditorPage() {
               </div>
               {activeAction && !showConfirm && <div className="p-2 border-t"><input value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} placeholder="调整要求后重新生成" className="w-full px-2 py-1 text-xs border rounded-lg bg-transparent" />
                 <button onClick={() => { const act = aiActions.find(a => a.action === activeAction); if (act) handleAIAction(act); }} className="w-full mt-1 px-2 py-1 text-xs bg-indigo-600 text-white rounded-lg cursor-pointer"><Wand2 size={12} />重新生成</button></div>}
-              <div className="border-t max-h-48 overflow-auto">
+              <div className="border-t max-h-64 overflow-auto">
                 {aiGenerating && <div className="p-3 flex items-center gap-2 text-sm text-zinc-500"><Loader2 size={14} className="animate-spin" />AI 生成中...</div>}
+                {aiReasoning && (
+                  <div className="p-2 border-b border-zinc-100 dark:border-zinc-800">
+                    <button onClick={() => setShowReasoning(!showReasoning)} className="flex items-center gap-1 text-[10px] text-indigo-500 cursor-pointer">
+                      {showReasoning ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                      思维链 {aiReasoning.length > 0 ? `(${aiReasoning.length}字)` : ''}
+                    </button>
+                    {showReasoning && <pre className="mt-1 text-[10px] text-zinc-500 whitespace-pre-wrap max-h-32 overflow-auto">{aiReasoning}</pre>}
+                  </div>
+                )}
                 {aiOutput && <div className="p-3"><div className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap">{aiOutput}</div>
                   {activeAction === 'summary' ? (
                     <button onClick={handleSaveSummary} className="mt-2 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 cursor-pointer w-full">保存摘要</button>
@@ -335,6 +472,12 @@ export default function SectionEditorPage() {
                     <button onClick={handleInsertAIText} className="mt-2 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 cursor-pointer w-full">插入到编辑器</button>
                   )}
                 </div>}
+                {aiUsage && (
+                  <div className="p-2 border-t border-zinc-100 dark:border-zinc-800 text-[10px] text-zinc-400 space-y-0.5">
+                    <div>Token 消耗：输入 {aiUsage.prompt_tokens?.toLocaleString() || '?'} + 输出 {aiUsage.completion_tokens?.toLocaleString() || '?'} = 共 {aiUsage.total_tokens?.toLocaleString() || '?'}</div>
+                    {aiUsage.cost !== undefined && <div>预估费用：{formatCost(aiUsage.cost)}</div>}
+                  </div>
+                )}
               </div>
             </>
           )}

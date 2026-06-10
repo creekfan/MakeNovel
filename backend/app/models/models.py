@@ -8,12 +8,6 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 
 
-class ChapterStatus(str, PyEnum):
-    DRAFT = "draft"
-    REVISING = "revising"
-    DONE = "done"
-
-
 class CharacterRole(str, PyEnum):
     PROTAGONIST = "protagonist"
     ANTAGONIST = "antagonist"
@@ -33,32 +27,10 @@ class Novel(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    chapters: Mapped[list["Chapter"]] = relationship("Chapter", back_populates="novel", cascade="all, delete-orphan",
-                                                       order_by="Chapter.chapter_number")
     characters: Mapped[list["Character"]] = relationship("Character", back_populates="novel", cascade="all, delete-orphan")
     settings: Mapped[list["Setting"]] = relationship("Setting", back_populates="novel", cascade="all, delete-orphan")
     outline_nodes: Mapped[list["OutlineNode"]] = relationship("OutlineNode", back_populates="novel",
                                                                 cascade="all, delete-orphan")
-
-
-class Chapter(Base):
-    __tablename__ = "chapters"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    novel_id: Mapped[int] = mapped_column(ForeignKey("novels.id"), nullable=False)
-    title: Mapped[str] = mapped_column(String(500), nullable=False)
-    chapter_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[ChapterStatus] = mapped_column(Enum(ChapterStatus), default=ChapterStatus.DRAFT)
-    content: Mapped[str] = mapped_column(Text, default="")
-    summary: Mapped[str] = mapped_column(Text, default="")
-    character_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
-    plot_points: Mapped[list] = mapped_column(JSON, default=list)
-    word_count: Mapped[int] = mapped_column(Integer, default=0)
-    chapter_prompt: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
-
-    novel: Mapped["Novel"] = relationship("Novel", back_populates="chapters")
 
 
 class Character(Base):
@@ -128,8 +100,9 @@ class OutlineNode(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(50), default="planned")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    assigned_chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True)
     content: Mapped[str] = mapped_column(Text, default="")
+    chapter_prompt: Mapped[str] = mapped_column(Text, default="")
+    embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -140,4 +113,3 @@ class OutlineNode(Base):
                                                           order_by="OutlineNode.sort_order")
     parent: Mapped["OutlineNode | None"] = relationship("OutlineNode", back_populates="children",
                                                           foreign_keys=[parent_id], remote_side=[id])
-    assigned_chapter: Mapped["Chapter | None"] = relationship("Chapter")

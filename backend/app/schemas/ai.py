@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class AIRequest(BaseModel):
     novel_id: int
-    chapter_id: Optional[int] = None
+    scene_id: Optional[int] = None
     action: str
     selected_text: str = ""
     instruction: str = ""
@@ -30,6 +30,14 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
+    provider: str = ""
+    model: str = ""
+    api_key: str = ""
+
+
+class AgentRequest(BaseModel):
+    novel_id: int
+    message: str
     provider: str = ""
     model: str = ""
     api_key: str = ""

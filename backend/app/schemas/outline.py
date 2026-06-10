@@ -19,9 +19,9 @@ class OutlineNodeUpdate(BaseModel):
     summary: Optional[str] = None
     notes: Optional[str] = None
     content: Optional[str] = None
+    chapter_prompt: Optional[str] = None
     status: Optional[str] = None
     sort_order: Optional[Union[int, float]] = None
-    assigned_chapter_id: Optional[int] = None
 
 
 class OutlineNodeOut(BaseModel):
@@ -34,8 +34,8 @@ class OutlineNodeOut(BaseModel):
     notes: str
     status: str
     sort_order: float
-    assigned_chapter_id: Optional[int] = None
     content: str = ""
+    chapter_prompt: str = ""
     children: list["OutlineNodeOut"] = []
     created_at: datetime.datetime
     updated_at: datetime.datetime

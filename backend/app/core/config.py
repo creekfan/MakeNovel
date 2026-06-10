@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3"
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-chat"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
     max_context_tokens: int = 8000
     max_output_tokens: int = 2000
 

@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n backend,frontend -c blue,green \"cd ../backend && D:\\annaconda\\python.exe -m uvicorn main:app --reload --port 8000\" \"next dev --port 3000\"",
+    "dev": "concurrently -n backend,frontend -c blue,green \"cd ../backend && python -m uvicorn main:app --reload --port 8000\" \"next dev --port 3000\"",
     "dev:frontend": "next dev --port 3000",
-    "dev:backend": "cd ../backend && D:\\annaconda\\python.exe -m uvicorn main:app --reload --port 8000",
+    "dev:backend": "cd ../backend && python -m uvicorn main:app --reload --port 8000",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

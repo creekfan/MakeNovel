@@ -22,34 +22,6 @@ export interface NovelListItem {
   updated_at: string;
 }
 
-export interface Chapter {
-  id: number;
-  novel_id: number;
-  title: string;
-  chapter_number: number;
-  status: 'draft' | 'revising' | 'done';
-  content: string;
-  summary: string;
-  character_snapshot: Record<string, unknown>;
-  plot_points: string[];
-  word_count: number;
-  chapter_prompt: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ChapterListItem {
-  id: number;
-  novel_id: number;
-  title: string;
-  chapter_number: number;
-  status: string;
-  summary: string;
-  word_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Character {
   id: number;
   novel_id: number;
@@ -105,8 +77,8 @@ export interface OutlineNode {
   notes: string;
   status: string;
   sort_order: number;
-  assigned_chapter_id: number | null;
   content: string;
+  chapter_prompt: string;
   children: OutlineNode[];
   created_at: string;
   updated_at: string;

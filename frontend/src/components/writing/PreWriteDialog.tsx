@@ -17,7 +17,6 @@ interface Props {
 
 export default function PreWriteDialog({ novelId, sectionId, sectionTitle, sectionSummary, onClose, onStart }: Props) {
   const { characters, settings, loadCharacters, loadSettings } = useCurrentNovelStore();
-  const { outline } = useCurrentNovelStore();
   const [selectedCharIds, setSelectedCharIds] = useState<number[]>([]);
   const [selectedSettingIds, setSelectedSettingIds] = useState<number[]>([]);
   const [recommending, setRecommending] = useState(true);
@@ -32,42 +31,45 @@ export default function PreWriteDialog({ novelId, sectionId, sectionTitle, secti
   // AI recommend context
   useEffect(() => {
     if (characters.length === 0 || settings.length === 0) return;
+    if (!recommending) return;
+
     const doRecommend = async () => {
-      setRecommending(true);
       try {
         const charList = characters.map(c => {
-          const p = c.profile || {};
-          const info = [c.role === 'protagonist' ? '主角' : c.role === 'antagonist' ? '反派' : c.role === 'supporting' ? '配角' : '次要'];
-          if (p.personality) info.push(p.personality);
-          if (p.background) info.push(p.background?.slice(0, 30));
-          return `- id:${c.id} ${c.name}（${info.join(', ')}）`;
+          const roleLabel = c.role === 'protagonist' ? '主角' : c.role === 'antagonist' ? '反派' : c.role === 'supporting' ? '配角' : '次要';
+          return `- id:${c.id} ${c.name}（${roleLabel}）`;
         }).join('\n');
 
         const setList = settings.map(s =>
-          `- id:${s.id} ${s.name}（${s.category}, ${s.description?.slice(0, 40) || ''}）`
+          `- id:${s.id} ${s.name}（${s.category}）`
         ).join('\n');
 
-        // Find current volume/chapter context
-        const findPath = (nodes: any[], targetId: number): string[] => {
-          for (const n of nodes) {
-            if (n.id === targetId) return [n.title];
-            if (n.children) {
-              const r = findPath(n.children, targetId);
-              if (r.length) return [n.title, ...r];
-            }
+        const instruction = `## 本节大纲\n【${sectionTitle}】${sectionSummary || '无概要'}\n\n## 可用角色\n${charList}\n\n## 可用世界观设定\n${setList}`;
+
+        // Read recommend provider credentials from persisted settings
+        let provider = 'gemini', model = 'gemini-2.5-flash', apiKey = '';
+        try {
+          const raw = localStorage.getItem('makenovel-settings');
+          const data = raw ? JSON.parse(raw) : {};
+          const state = data.state || data;
+          provider = state.recommendProvider || 'gemini';
+          const customModel = state.recommendModel || '';
+          if (provider === 'deepseek') {
+            apiKey = state.deepseekKey || '';
+            model = customModel || 'deepseek-chat';
+          } else {
+            apiKey = state.geminiKey || '';
+            model = customModel || state.geminiModel || 'gemini-2.5-flash';
           }
-          return [];
-        };
-        const path = findPath(outline, sectionId);
-        const ctxStr = path.length > 1 ? `卷：${path[0]} | 章：${path[1]}` : '';
+        } catch { /* fall through with defaults */ }
 
-        const instruction = `## 本节大纲\n【${sectionTitle}】${sectionSummary || '无概要'}\n${ctxStr ? `\n## 卷/章上下文\n${ctxStr}` : ''}\n\n## 可用角色\n${charList}\n\n## 可用世界观设定\n${setList}`;
-
-        const creds = localStorage.getItem('makenovel-settings');
-        const stored = creds ? JSON.parse(creds).state || JSON.parse(creds) : {};
-        const provider = stored.provider || 'openai';
-        const model = stored[provider + 'Model'] || '';
-        const apiKey = provider === 'ollama' ? (stored.ollamaUrl || '') : (stored[provider + 'Key'] || '');
+        if (!apiKey) {
+          // No credentials configured — select all
+          setSelectedCharIds(characters.map(c => c.id));
+          setSelectedSettingIds(settings.map(s => s.id));
+          setRecommending(false);
+          return;
+        }
 
         const resp = await api.generateAI({
           novel_id: novelId,
@@ -81,23 +83,55 @@ export default function PreWriteDialog({ novelId, sectionId, sectionTitle, secti
         const reader = resp.body?.getReader();
         const decoder = new TextDecoder();
         let full = '';
+        let errorMsg = '';
         if (reader) {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             for (const line of decoder.decode(value, { stream: true }).split('\n')) {
               if (line.startsWith('data: ') && line.slice(6).trim() !== '[DONE]') {
-                try { full += JSON.parse(line.slice(6).trim()).token || ''; } catch {}
+                try {
+                  const parsed = JSON.parse(line.slice(6).trim());
+                  if (parsed.error) {
+                    errorMsg = parsed.error;
+                  } else if (parsed.token) {
+                    full += parsed.token;
+                  }
+                } catch {}
               }
             }
           }
         }
 
+        if (errorMsg) {
+          console.error('Recommend error:', errorMsg);
+          setSelectedCharIds(characters.map(c => c.id));
+          setSelectedSettingIds(settings.map(s => s.id));
+          setRecommending(false);
+          return;
+        }
+
+        // Parse JSON from response
         const match = full.match(/\{[\s\S]*\}/);
         if (match) {
           const parsed = JSON.parse(match[0]);
-          if (Array.isArray(parsed.character_ids)) setSelectedCharIds(parsed.character_ids.filter((id: number) => characters.find(c => c.id === id)));
-          if (Array.isArray(parsed.setting_ids)) setSelectedSettingIds(parsed.setting_ids.filter((id: number) => settings.find(s => s.id === id)));
+          const charIds: number[] = Array.isArray(parsed.character_ids) ? parsed.character_ids : [];
+          const setIds: number[] = Array.isArray(parsed.setting_ids) ? parsed.setting_ids : [];
+          // Filter to only valid IDs that exist
+          const validCharIds = charIds.filter(id => typeof id === 'number' && characters.some(c => c.id === id));
+          const validSetIds = setIds.filter(id => typeof id === 'number' && settings.some(s => s.id === id));
+          if (validCharIds.length || validSetIds.length) {
+            setSelectedCharIds(validCharIds);
+            setSelectedSettingIds(validSetIds);
+          } else {
+            // AI returned nothing useful — select all as fallback
+            setSelectedCharIds(characters.map(c => c.id));
+            setSelectedSettingIds(settings.map(s => s.id));
+          }
+        } else {
+          // No JSON found — select all
+          setSelectedCharIds(characters.map(c => c.id));
+          setSelectedSettingIds(settings.map(s => s.id));
         }
       } catch {
         setSelectedCharIds(characters.map(c => c.id));
@@ -106,7 +140,7 @@ export default function PreWriteDialog({ novelId, sectionId, sectionTitle, secti
       setRecommending(false);
     };
     doRecommend();
-  }, [characters, settings, sectionTitle, sectionSummary, sectionId, outline, novelId]);
+  }, [characters, settings, sectionTitle, sectionSummary, sectionId, novelId, recommending]);
 
   const filteredChars = characters.filter(c =>
     c.name.toLowerCase().includes(charSearch.toLowerCase()) && !selectedCharIds.includes(c.id)
@@ -120,7 +154,7 @@ export default function PreWriteDialog({ novelId, sectionId, sectionTitle, secti
 
   const handleEditChar = (char: Character) => {
     const p = char.profile || {};
-    setEditCharForm({ name: char.name, age: p.age || '', personality: p.personality || '', background: p.background || '', arc: char.arc || '' });
+    setEditCharForm({ name: char.name, age: p.age || '', personality: p.personality || '', background: p.background || '', appearance: p.appearance || '', speech_style: p.speech_style || '', arc: char.arc || '' });
     setEditingChar(char);
     setEditingSetting(null);
   };
@@ -129,7 +163,7 @@ export default function PreWriteDialog({ novelId, sectionId, sectionTitle, secti
     if (!editingChar) return;
     const name = editCharForm.name || editingChar.name;
     const arc = editCharForm.arc || '';
-    const profile = { age: editCharForm.age || '', personality: editCharForm.personality || '', background: editCharForm.background || '' };
+    const profile = { age: editCharForm.age || '', personality: editCharForm.personality || '', background: editCharForm.background || '', appearance: editCharForm.appearance || '', speech_style: editCharForm.speech_style || '' };
     await api.updateCharacter(editingChar.id, { name, arc, profile });
     setEditingChar(null);
     loadCharacters();
@@ -192,7 +226,9 @@ export default function PreWriteDialog({ novelId, sectionId, sectionTitle, secti
                 <input value={editCharForm.name} onChange={e => setEditCharForm({...editCharForm, name: e.target.value})} placeholder="姓名" className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-zinc-800" />
                 <input value={editCharForm.age} onChange={e => setEditCharForm({...editCharForm, age: e.target.value})} placeholder="年龄" className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-zinc-800" />
                 <input value={editCharForm.personality} onChange={e => setEditCharForm({...editCharForm, personality: e.target.value})} placeholder="性格" className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-zinc-800" />
+                <input value={editCharForm.appearance} onChange={e => setEditCharForm({...editCharForm, appearance: e.target.value})} placeholder="外貌" className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-zinc-800" />
                 <input value={editCharForm.background} onChange={e => setEditCharForm({...editCharForm, background: e.target.value})} placeholder="背景" className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-zinc-800" />
+                <input value={editCharForm.speech_style} onChange={e => setEditCharForm({...editCharForm, speech_style: e.target.value})} placeholder="说话风格" className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-zinc-800" />
                 <textarea value={editCharForm.arc} onChange={e => setEditCharForm({...editCharForm, arc: e.target.value})} placeholder="角色弧光" rows={2} className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-zinc-800 resize-none" />
                 <button onClick={saveEditChar} className="text-xs px-2 py-1 bg-indigo-600 text-white rounded cursor-pointer">保存</button>
               </div>

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import init_db
 from app.api import (
-    novels_router, chapters_router, characters_router,
+    novels_router, characters_router,
     settings_router, outlines_router, ai_router,
 )
 
@@ -27,7 +27,6 @@ app.add_middleware(
 )
 
 app.include_router(novels_router)
-app.include_router(chapters_router)
 app.include_router(characters_router)
 app.include_router(settings_router)
 app.include_router(outlines_router)

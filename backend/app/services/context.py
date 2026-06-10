@@ -1,17 +1,15 @@
-from sqlalchemy import select, desc
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.models.models import Novel, Chapter, Character, CharacterRelationship, Setting, OutlineNode
-from app.core.config import settings
+from app.models.models import Novel, Character, CharacterRelationship, Setting, OutlineNode
 
 
 async def build_context(
     db: AsyncSession,
     novel_id: int,
-    chapter_id: int | None = None,
     active_character_ids: list[int] | None = None,
     active_setting_ids: list[int] | None = None,
+    current_scene_id: int | None = None,
 ) -> str:
     parts = []
 
@@ -29,19 +27,9 @@ async def build_context(
 
     if active_character_ids:
         active_chars = [char_map[cid] for cid in active_character_ids if cid in char_map]
-    else:
-        if chapter_id:
-            chapter = await db.get(Chapter, chapter_id)
-            if chapter and chapter.character_snapshot:
-                active_chars = [char_map[cid] for cid in chapter.character_snapshot.get("character_ids", []) if cid in char_map]
-            else:
-                active_chars = []
-        else:
-            active_chars = []
-
-    if active_character_ids is not None and not active_character_ids:
+    elif active_character_ids is not None and not active_character_ids:
         active_chars = []
-    elif not active_chars:
+    else:
         active_chars = all_characters[:5]
 
     if active_chars:
@@ -79,24 +67,6 @@ async def build_context(
 
             parts.append(char_text)
 
-    if chapter_id:
-        chapter = await db.get(Chapter, chapter_id)
-        if chapter and chapter.chapter_prompt:
-            parts.append(f"\n## 本章创作重点（作者设定）\n{chapter.chapter_prompt}")
-
-        recent_chapters = (await db.execute(
-            select(Chapter)
-            .where(Chapter.novel_id == novel_id, Chapter.id < chapter_id)
-            .order_by(desc(Chapter.chapter_number))
-            .limit(3)
-        )).scalars().all()
-
-        if recent_chapters:
-            parts.append("\n## 前文摘要（最近3章）")
-            for ch in reversed(recent_chapters):
-                if ch.summary:
-                    parts.append(f"\n第{ch.chapter_number}章《{ch.title}》：{ch.summary}")
-
     current_settings = (await db.execute(
         select(Setting).where(Setting.novel_id == novel_id)
     )).scalars().all()
@@ -118,26 +88,22 @@ async def build_context(
             if s.notable_features:
                 parts.append("  关键特征：" + "、".join(s.notable_features[:5]))
 
-    # Inject outline structure
     outline_nodes = (await db.execute(
         select(OutlineNode).where(OutlineNode.novel_id == novel_id)
     )).scalars().all()
 
     if outline_nodes:
-        node_map: dict[int, list[OutlineNode]] = {}
+        node_map: dict[int | None, list[OutlineNode]] = {}
+        node_by_id: dict[int, OutlineNode] = {}
         for n in outline_nodes:
-            pid = n.parent_id or 0
+            pid = n.parent_id
             if pid not in node_map:
                 node_map[pid] = []
             node_map[pid].append(n)
+            node_by_id[n.id] = n
 
-        def collect_scenes(vol_id: int, depth: int = 0) -> list[OutlineNode]:
-            result: list[OutlineNode] = []
-            for child in node_map.get(vol_id, []):
-                if child.node_type == 'scene':
-                    result.append(child)
-                result.extend(collect_scenes(child.id, depth + 1))
-            return result
+        for pid in node_map:
+            node_map[pid].sort(key=lambda n: n.sort_order or 0)
 
         volumes = [n for n in outline_nodes if n.node_type == 'volume']
         if volumes:
@@ -146,16 +112,47 @@ async def build_context(
                 parts.append(f"\n### {vol.title}")
                 if vol.summary:
                     parts.append(f"  主题：{vol.summary}")
-                scenes = collect_scenes(vol.id)
-                if scenes:
-                    for scene in scenes[:20]:
-                        line = f"  - {scene.title}"
-                        if scene.summary:
-                            line += f"：{scene.summary[:50]}"
-                        if scene.content:
-                            line += f"（已写{len(scene.content)}字）"
-                        parts.append(line)
-                else:
-                    parts.append("  （尚无节）")
+                for ch in node_map.get(vol.id, []):
+                    if ch.node_type == 'chapter':
+                        parts.append(f"\n#### {ch.title}")
+                        if ch.summary:
+                            parts.append(f"  概要：{ch.summary}")
+                        if ch.chapter_prompt:
+                            parts.append(f"  创作重点：{ch.chapter_prompt}")
+                        for sc in node_map.get(ch.id, []):
+                            if sc.node_type == 'scene':
+                                line = f"  - {sc.title}"
+                                if sc.summary:
+                                    line += f"：{sc.summary[:50]}"
+                                if sc.content:
+                                    line += f"（已写{len(sc.content)}字）"
+                                parts.append(line)
+
+        if current_scene_id and current_scene_id in node_by_id:
+            cur_scene = node_by_id[current_scene_id]
+            if cur_scene.chapter_prompt:
+                parts.append(f"\n## 本节创作重点\n{cur_scene.chapter_prompt}")
+
+        if current_scene_id:
+            all_scenes = []
+            for vol in volumes:
+                for ch in node_map.get(vol.id, []):
+                    if ch.node_type == 'chapter':
+                        for sc in node_map.get(ch.id, []):
+                            if sc.node_type == 'scene':
+                                all_scenes.append(sc)
+
+            idx = next((i for i, s in enumerate(all_scenes) if s.id == current_scene_id), -1)
+            if idx > 0:
+                prev_scene = all_scenes[idx - 1]
+                if prev_scene.summary:
+                    parts.append(f"\n## 上一节摘要\n{prev_scene.summary}")
+
+            recent_scenes = all_scenes[max(0, idx - 3):idx]
+            recent_with_content = [s for s in reversed(recent_scenes) if s.summary]
+            if recent_with_content:
+                parts.append("\n## 前文摘要（最近已写各节）")
+                for sc in recent_with_content[:3]:
+                    parts.append(f"\n{sc.title}：{sc.summary[:200]}")
 
     return "\n".join(parts)

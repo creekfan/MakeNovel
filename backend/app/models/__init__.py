@@ -1,6 +1,6 @@
-from app.models.models import Novel, Chapter, Character, CharacterRelationship, Setting, OutlineNode, ChapterStatus, CharacterRole
+from app.models.models import Novel, Character, CharacterRelationship, Setting, OutlineNode, CharacterRole
 
 __all__ = [
-    "Novel", "Chapter", "Character", "CharacterRelationship",
-    "Setting", "OutlineNode", "ChapterStatus", "CharacterRole",
+    "Novel", "Character", "CharacterRelationship",
+    "Setting", "OutlineNode", "CharacterRole",
 ]

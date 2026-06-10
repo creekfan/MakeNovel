@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Novel, NovelListItem, Chapter, Character, Setting, OutlineNode } from '@/types';
+import type { Novel, NovelListItem, Character, Setting, OutlineNode } from '@/types';
 import { api } from '@/lib/api';
 
 interface NovelStore {
@@ -42,24 +42,19 @@ export const useNovelStore = create<NovelStore>((set) => ({
 
 interface CurrentNovelStore {
   novel: Novel | null;
-  chapters: Chapter[];
   characters: Character[];
   settings: Setting[];
   outline: OutlineNode[];
   loading: boolean;
   notFound: boolean;
   loadNovel: (id: number) => Promise<void>;
-  loadChapters: () => Promise<void>;
   loadCharacters: () => Promise<void>;
   loadSettings: () => Promise<void>;
   loadOutline: () => Promise<void>;
-  addChapter: (data: { title: string; chapter_number: number }) => Promise<Chapter>;
-  deleteChapter: (id: number) => Promise<void>;
 }
 
 export const useCurrentNovelStore = create<CurrentNovelStore>((set, get) => ({
   novel: null,
-  chapters: [],
   characters: [],
   settings: [],
   outline: [],
@@ -73,12 +68,6 @@ export const useCurrentNovelStore = create<CurrentNovelStore>((set, get) => ({
     } catch {
       set({ novel: null, loading: false, notFound: true });
     }
-  },
-  loadChapters: async () => {
-    const novel = get().novel;
-    if (!novel) return;
-    const chapters = await api.listChapters(novel.id);
-    set({ chapters: chapters.map((c) => ({ ...c, content: '', character_snapshot: {}, plot_points: [], chapter_prompt: '' })) as Chapter[] });
   },
   loadCharacters: async () => {
     const novel = get().novel;
@@ -98,17 +87,6 @@ export const useCurrentNovelStore = create<CurrentNovelStore>((set, get) => ({
     const outline = await api.listOutline(novel.id);
     set({ outline });
   },
-  addChapter: async (data) => {
-    const novel = get().novel;
-    if (!novel) throw new Error('No novel loaded');
-    const chapter = await api.createChapter({ novel_id: novel.id, ...data });
-    set((s) => ({ chapters: [...s.chapters, chapter] }));
-    return chapter;
-  },
-  deleteChapter: async (id) => {
-    await api.deleteChapter(id);
-    set((s) => ({ chapters: s.chapters.filter((c) => c.id !== id) }));
-  },
 }));
 
 interface SettingsStore {
@@ -121,6 +99,10 @@ interface SettingsStore {
   ollamaModel: string;
   deepseekKey: string;
   deepseekModel: string;
+  geminiKey: string;
+  geminiModel: string;
+  recommendProvider: string;
+  recommendModel: string;
   setProvider: (p: string) => void;
   setOpenaiKey: (k: string) => void;
   setOpenaiModel: (m: string) => void;
@@ -130,6 +112,10 @@ interface SettingsStore {
   setOllamaModel: (m: string) => void;
   setDeepseekKey: (k: string) => void;
   setDeepseekModel: (m: string) => void;
+  setGeminiKey: (k: string) => void;
+  setGeminiModel: (m: string) => void;
+  setRecommendProvider: (p: string) => void;
+  setRecommendModel: (m: string) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -144,6 +130,10 @@ export const useSettingsStore = create<SettingsStore>()(
       ollamaModel: 'llama3',
       deepseekKey: '',
       deepseekModel: 'deepseek-chat',
+      geminiKey: '',
+      geminiModel: 'gemini-2.5-flash',
+      recommendProvider: 'gemini',
+      recommendModel: '',
       setProvider: (provider) => set({ provider }),
       setOpenaiKey: (openaiKey) => set({ openaiKey }),
       setOpenaiModel: (openaiModel) => set({ openaiModel }),
@@ -153,11 +143,15 @@ export const useSettingsStore = create<SettingsStore>()(
       setOllamaModel: (ollamaModel) => set({ ollamaModel }),
       setDeepseekKey: (deepseekKey) => set({ deepseekKey }),
       setDeepseekModel: (deepseekModel) => set({ deepseekModel }),
+      setGeminiKey: (geminiKey) => set({ geminiKey }),
+      setGeminiModel: (geminiModel) => set({ geminiModel }),
+      setRecommendProvider: (recommendProvider) => set({ recommendProvider }),
+      setRecommendModel: (recommendModel) => set({ recommendModel }),
     }),
     {
       name: 'makenovel-settings',
       partialize: (state) => {
-        const { setProvider, setOpenaiKey, setOpenaiModel, setAnthropicKey, setAnthropicModel, setOllamaUrl, setOllamaModel, setDeepseekKey, setDeepseekModel, ...data } = state;
+        const { setProvider, setOpenaiKey, setOpenaiModel, setAnthropicKey, setAnthropicModel, setOllamaUrl, setOllamaModel, setDeepseekKey, setDeepseekModel, setGeminiKey, setGeminiModel, setRecommendProvider, setRecommendModel, ...data } = state;
         return data as Record<string, unknown>;
       },
     }
