@@ -1,0 +1,353 @@
+:root {
+  --bg: #f5f5f5;
+  --bg-card: #fff;
+  --bg-input: #fff;
+  --bg-hover: #f0f0f0;
+  --bg-agent-btn: #f9fafb;
+  --bg-agent-hover: #f0f4ff;
+  --text: #333;
+  --text-secondary: #666;
+  --text-muted: #999;
+  --border: #ddd;
+  --border-light: #e5e7eb;
+  --shadow: rgba(0, 0, 0, 0.1);
+  --sidebar-bg: #1a1a2e;
+  --sidebar-text: #eee;
+  --sidebar-link: #ccc;
+  --sidebar-hover: #16213e;
+  --sidebar-border: #333;
+  --tag-bg: #e5e7eb;
+  --tag-text: #333;
+  --badge-vol-bg: #fef3c7;
+  --badge-vol-text: #92400e;
+  --badge-ch-bg: #dbeafe;
+  --badge-ch-text: #1e40af;
+  --badge-sec-bg: #d1fae5;
+  --badge-sec-text: #065f46;
+}
+
+body.dark {
+  --bg: #1a1a1a;
+  --bg-card: #2a2a2a;
+  --bg-input: #333;
+  --bg-hover: #383838;
+  --bg-agent-btn: #2a2a2a;
+  --bg-agent-hover: #333;
+  --text: #e5e5e5;
+  --text-secondary: #aaa;
+  --text-muted: #777;
+  --border: #444;
+  --border-light: #444;
+  --shadow: rgba(0, 0, 0, 0.4);
+  --sidebar-bg: #111;
+  --sidebar-text: #eee;
+  --sidebar-link: #aaa;
+  --sidebar-hover: #222;
+  --sidebar-border: #333;
+  --tag-bg: #3a3a3a;
+  --tag-text: #ccc;
+  --badge-vol-bg: #4a3800;
+  --badge-vol-text: #fcd34d;
+  --badge-ch-bg: #1e3a5f;
+  --badge-ch-text: #93c5fd;
+  --badge-sec-bg: #064e3b;
+  --badge-sec-text: #6ee7b7;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  transition: background 0.2s, color 0.2s;
+}
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar h1 {
+  font-size: 18px;
+  padding: 0 20px 16px;
+  border-bottom: 1px solid var(--sidebar-border);
+  margin-bottom: 12px;
+}
+
+.sidebar nav a {
+  display: block;
+  padding: 10px 20px;
+  color: var(--sidebar-link);
+  text-decoration: none;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.sidebar nav a:hover,
+.sidebar nav a.active {
+  background: var(--sidebar-hover);
+  color: #fff;
+}
+
+.main-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.card {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.btn-primary {
+  background: #4a6cf7;
+  color: #fff;
+}
+
+.btn-success {
+  background: #22c55e;
+  color: #fff;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: #fff;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+textarea,
+select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  margin-bottom: 8px;
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.outline-tree {
+  font-size: 14px;
+}
+
+.outline-tree .node {
+  margin-left: 16px;
+  padding: 4px 0;
+}
+
+.outline-tree .node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.outline-tree .node-header:hover {
+  background: var(--bg-hover);
+}
+
+.outline-tree .node-header.active {
+  background: var(--bg-hover);
+}
+
+.node-type-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.badge-volume {
+  background: var(--badge-vol-bg);
+  color: var(--badge-vol-text);
+}
+
+.badge-chapter {
+  background: var(--badge-ch-bg);
+  color: var(--badge-ch-text);
+}
+
+.badge-section {
+  background: var(--badge-sec-bg);
+  color: var(--badge-sec-text);
+}
+
+.editor-container {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 80px);
+}
+
+.editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-main textarea {
+  flex: 1;
+  min-height: 400px;
+  font-size: 16px;
+  line-height: 1.8;
+  padding: 20px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  resize: none;
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.agent-panel {
+  width: 280px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px var(--shadow);
+  overflow-y: auto;
+}
+
+.agent-panel h3 {
+  font-size: 14px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.agent-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-agent-btn);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.agent-btn:hover {
+  border-color: #4a6cf7;
+  background: var(--bg-agent-hover);
+}
+
+.agent-btn .agent-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.agent-btn .agent-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  border-radius: 3px;
+  font-size: 12px;
+  margin-right: 4px;
+  margin-bottom: 4px;
+}
+
+.status-planned {
+  color: #6b7280;
+}
+
+.status-draft {
+  color: #f59e0b;
+}
+
+.status-done {
+  color: #22c55e;
+}
+
+.theme-toggle {
+  margin-top: auto;
+  padding: 10px 20px;
+  border-top: 1px solid var(--sidebar-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--sidebar-link);
+  font-size: 13px;
+  transition: color 0.2s;
+}
+
+.theme-toggle:hover {
+  color: #fff;
+}

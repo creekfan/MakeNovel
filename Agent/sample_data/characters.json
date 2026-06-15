@@ -1,0 +1,58 @@
+[
+  {
+    "id": "char-lin-xing",
+    "name": "林星",
+    "role": "protagonist",
+    "appearance": "十六岁少年，身材清瘦，黑色短发，琥珀色眼眸。常穿朴素的灰蓝色布衣。",
+    "personality": "好奇心旺盛，性格温和但意志坚定。对他人的苦难充满同情，有时过于冲动。",
+    "background": "边境小镇铁匠之子，母亲早逝，由父亲抚养长大。从小仰望星空，对星辰有着异于常人的感应。",
+    "abilities": "星辰之力（刚觉醒，尚不稳定）——可感知和引导星光的能量。",
+    "speech_style": "用词朴实，语气真挚。思考时会微微停顿。",
+    "arc": "从普通少年成长为能够掌控星辰之力的强者。",
+    "current_state": "刚觉醒星辰之力，身处小镇后山。",
+    "relationships": [
+      {
+        "source_id": "char-lin-xing",
+        "target_id": "char-bai-yue",
+        "relation_type": "同伴/导师",
+        "description": "白月是林星遇到的第一个同类，引导他了解星辰之力的世界。"
+      },
+      {
+        "source_id": "char-lin-xing",
+        "target_id": "char-lin-fu",
+        "relation_type": "父子",
+        "description": "林父关爱儿子但沉默寡言，对林星的天赋隐约有所察觉。"
+      }
+    ]
+  },
+  {
+    "id": "char-bai-yue",
+    "name": "白月",
+    "role": "supporting",
+    "appearance": "银白色长发，浅紫色眼眸，肌肤苍白如月。身穿残破的白色斗篷，左臂有灼伤。",
+    "personality": "外表冷漠，内心温柔。因背负使命而习惯独行，对他人保持距离。",
+    "background": "来自北方星落城的星选者后裔，家族被黑袍组织追杀。独自逃往南方寻找传说中的星辰之源。",
+    "abilities": "月华之力——可以操控月光，擅长隐匿和幻术。",
+    "speech_style": "言简意赅，语气冷淡但不失礼貌。偶尔流露出对过去的怀念。",
+    "arc": "从封闭内心到重新信任他人。",
+    "current_state": "受伤逃亡中，在陨石坑旁遇到林星。",
+    "relationships": [
+      {
+        "source_id": "char-bai-yue",
+        "target_id": "char-lin-xing",
+        "relation_type": "同伴/引导者",
+        "description": "认为林星可能是她寻找的关键人物。"
+      }
+    ]
+  },
+  {
+    "id": "char-hei-ying",
+    "name": "黑影",
+    "role": "antagonist",
+    "appearance": "全身笼罩在黑色斗篷中，只露出猩红色的双眼。身形高大，行动无声。",
+    "personality": "冷酷无情，绝对服从组织的命令。",
+    "background": "黑袍组织「星噬会」的低级追猎者，被派遣追踪逃走的星选者后裔。",
+    "abilities": "暗影步——可在阴影中穿梭移动。",
+    "speech_style": "沉默寡言，只在必要时开口，语气阴冷。"
+  }
+]

@@ -1,0 +1,71 @@
+{
+  "novel_id": "novel-001",
+  "novel_title": "星辰之海",
+  "volumes": [
+    {
+      "id": "vol-1",
+      "title": "第一卷：启程",
+      "node_type": "volume",
+      "summary": "主角林星在边境小镇觉醒星辰之力，踏上寻找真相的旅途。",
+      "status": "planned",
+      "sort_order": 1.0,
+      "children": [
+        {
+          "id": "ch-1",
+          "title": "第一章：觉醒之夜",
+          "node_type": "chapter",
+          "summary": "林星在流星雨之夜意外觉醒星辰之力，与神秘少女相遇。",
+          "status": "planned",
+          "sort_order": 1.0,
+          "children": [
+            {
+              "id": "sec-1-1",
+              "title": "第一节：流星雨",
+              "node_type": "section",
+              "summary": "林星独自在小镇后山观测流星雨，意外发现一颗流星坠落在附近，前往查看时触发了体内的星辰之力。",
+              "chapter_prompt": "描写林星的日常背景、性格特点，以及觉醒时的震撼感受。",
+              "status": "done",
+              "sort_order": 1.0
+            },
+            {
+              "id": "sec-1-2",
+              "title": "第二节：神秘少女",
+              "node_type": "section",
+              "summary": "觉醒力量后，林星在陨石坑旁遇到一位受伤的神秘少女白月，两人初次交谈，少女透露林星是「星选者」。",
+              "chapter_prompt": "重点描写两人的初次相遇对话，建立悬念。",
+              "status": "planned",
+              "sort_order": 2.0
+            },
+            {
+              "id": "sec-1-3",
+              "title": "第三节：追兵",
+              "node_type": "section",
+              "summary": "一群黑袍人追踪少女而来，林星首次使用星辰之力战斗，掩护少女逃离。",
+              "chapter_prompt": "首次战斗场景，展示林星的成长潜力和星辰之力的特性。",
+              "status": "planned",
+              "sort_order": 3.0
+            }
+          ]
+        },
+        {
+          "id": "ch-2",
+          "title": "第二章：逃亡之路",
+          "node_type": "chapter",
+          "summary": "林星与白月逃离小镇，前往北方的星落城。途中林星开始学习控制星辰之力。",
+          "status": "planned",
+          "sort_order": 2.0,
+          "children": [
+            {
+              "id": "sec-2-1",
+              "title": "第一节：离开故乡",
+              "node_type": "section",
+              "summary": "林星告别小镇，与白月一同踏上旅途，途中白月讲解星辰之力的基本知识。",
+              "status": "planned",
+              "sort_order": 1.0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
