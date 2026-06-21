@@ -1,59 +1,67 @@
-# MakeNovel
+# NovelAgent
 
-AI 驱动的小说写作工具，基于多 Agent 管道（准备→创作→审查→修订→润色）实现结构化长篇小说创作。
+基于 **LangChain** + **LangGraph** 的 AI 长篇小说写作辅助工具。
+
+大纲驱动，用户设计结构 → Agent 通过 ReAct 循环自动创作/润色/审查。
 
 ## 架构
 
 ```
-MakeNovel/
-├── Agent/              # 核心 Agent 管道（Python）
-├── backend/            # FastAPI REST API
-├── frontend/           # React + TypeScript + Vite
-├── migrate_db.py       # 旧版 SQLite 数据迁移脚本
-├── test_all.py         # 后端测试套件（24 项）
-└── start.bat           # Windows 一键启动
+NovelAgent/
+├── backend/
+│   ├── main.py            # FastAPI 入口
+│   ├── storage.py         # JSON 文件持久化
+│   ├── app/
+│   │   ├── agent.py       # LangGraph ReAct Agent
+│   │   ├── tools.py       # 6 个 LangChain Tool
+│   │   ├── memory.py      # ChromaDB RAG（向量检索）
+│   │   ├── prompts.py     # Agent 系统提示词
+│   │   └── skills/        # 8 个 Prompt 模板(.md)
+│   └── routers/           # REST API 路由
+├── frontend/
+│   └── src/
+│       ├── pages/         # 7 个页面
+│       ├── api/           # API 客户端（含 SSE 消费）
+│       └── store/         # Zustand 状态管理
+├── start.bat              # Windows 一键启动
+└── test_all.py            # 测试套件（28 项）
 ```
 
 ## 功能
 
 - **项目管理** — 创建/删除小说项目
-- **大纲编辑** — 卷→章→节 三级树形结构，每层可写情节概要，支持节点插入/删除/编辑
-- **写作页面** — 从大纲直达编辑器，正文自动保存（1s 防抖）
-- **Agent 调用** — 一键运行完整管道或单步 Agent，SSE 实时显示进度及中间产出
-- **生成摘要** — LLM 归纳正文生成结构化摘要，自动标记完成并写入上下文链
-- **角色卡片** — 名称/定位/外貌/性格/背景/能力/说话风格/弧光
-- **世界观设定** — 7 类分类筛选（环境/势力/规则/种族/物品/职业/历史），内联编辑
-- **模型设置** — API Key 安全缓存在浏览器 localStorage（Base64），支持自定义模型/base_url/参数
-- **深色模式** — 跟随系统或手动切换，全局 CSS 变量
+- **大纲编辑** — 卷→章→节 三级树形结构，支持节点插入/删除/编辑/内联摘要
+- **LangChain Agent** — 自然语言指令驱动，ReAct 循环自动获取上下文→创作→完成
+- **RAG 记忆** — ChromaDB + sentence-transformers 向量检索，Agent 自动搜索前文
+- **生成摘要** — LLM 归纳正文为结构化 JSON，自动标记完成并写入上下文链
+- **角色卡片** — 名称/定位/外貌/性格/背景/能力/说话风格/弧光/关系
+- **世界观设定** — 7 类分类筛选（环境/势力/规则/种族/物品/职业/历史）
+- **模型设置** — API Key Base64 编码存 localStorage，支持任意 OpenAI 兼容 API
+- **深色模式** — 手动切换，全局 CSS 变量
 
-## Agent 管道
+## Agent 工具
 
-```
-准备者 → 创作者 → 审查者 → 修订者 → 润色者
-```
+| 工具 | 用途 |
+|------|------|
+| `get_outline` | 读取完整大纲结构（卷→章→节） |
+| `get_characters` | 读取角色档案 |
+| `get_world_settings` | 读取世界观设定 |
+| `get_summaries` | 读取前文摘要 |
+| `search_memory` | ChromaDB RAG 向量检索已写内容 |
+| `finish` | 完成任务，返回创作的正文 |
 
-| Agent | 职责 |
-|-------|------|
-| Preparer | 读取大纲/前文/角色/世界观，组装写作上下文 |
-| Creator | 根据上下文生成正文初稿 |
-| Reviewer | 审查逻辑/角色一致性/情节漏洞 |
-| Reviser | 根据审查意见修订正文 |
-| Polisher | 优化文笔表达 |
+Agent 流程：获取数据 → LLM 推理 → 创作正文 → `finish` 返回结果，全部通过 SSE 流式推送到前端。
 
 ## 快速开始
 
 ### 环境要求
-
-- Python 3.11+（需安装 fastapi、uvicorn、openai、pydantic）
+- Python 3.9+
 - Node.js 18+
 
 ### 安装
 
 ```bash
-# 后端依赖
-pip install fastapi uvicorn[standard] openai pydantic pyyaml
-
-# 前端依赖
+pip install -r backend/requirements.txt
 cd frontend && npm install
 ```
 
@@ -61,30 +69,27 @@ cd frontend && npm install
 
 **Windows：** 双击 `start.bat`
 
-**手动启动：**
-
+**手动：**
 ```bash
-# 后端（端口 8001）
 uvicorn backend.main:app --host 0.0.0.0 --port 8001 --reload
-
-# 前端（端口 3001）
 cd frontend && npm run dev
 ```
 
-打开浏览器访问 http://localhost:3001
+浏览器访问 http://localhost:3001
 
 ### 配置 LLM
-
-1. 进入任意项目 → 侧边栏「模型设置」
-2. 填入 DeepSeek API Key（或其他 OpenAI 兼容 API）
+1. 进入项目 → 侧边栏「模型设置」
+2. 填入 API Key（DeepSeek / OpenAI 等）
 3. 可自定义 model、base_url、temperature、max_tokens
 
 ## API 端点
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET | `/api/health` | 健康检查 |
 | GET | `/api/novels` | 项目列表 |
 | POST | `/api/novels` | 创建项目 |
+| DELETE | `/api/novels/:id` | 删除项目 |
 | GET | `/api/novels/:id/outline` | 获取大纲 |
 | PUT | `/api/novels/:id/outline` | 保存大纲 |
 | GET | `/api/novels/:id/outline/section/:sid/content` | 获取正文 |
@@ -93,32 +98,25 @@ cd frontend && npm run dev
 | PUT | `/api/novels/:id/characters` | 保存角色 |
 | GET | `/api/novels/:id/world` | 世界观列表 |
 | PUT | `/api/novels/:id/world` | 保存世界观 |
-| POST | `/api/novels/:id/agent/run-stream` | 流式执行完整管道（SSE） |
-| POST | `/api/novels/:id/agent/single` | 执行单步 Agent |
-| POST | `/api/novels/:id/agent/summarize` | 生成摘要 |
+| POST | `/api/novels/:id/agent/run` | 运行 LangChain Agent（SSE 流式） |
+| POST | `/api/novels/:id/agent/summrize` | 生成摘要 |
 
 ## 数据存储
 
-项目数据以 JSON 文件存储在 `backend/data/{novel_id}/`：
-
 ```
-backend/data/{id}/
+backend/data/{novel_id}/
 ├── meta.json           # 项目元信息
-├── outline.json        # 大纲树
+├── outline.json        # 大纲树（卷→章→节）
 ├── characters.json     # 角色卡片
 ├── world_settings.json # 世界观设定
-├── summaries.json      # 已完成章节摘要（Agent 上下文链）
-└── sections/           # 各节正文
-    ├── node-1.txt
-    └── ...
+├── summaries.json      # 已完成章节摘要
+└── sections/           # 各节正文 .txt
 ```
+
+RAG 向量存储在 `backend/data/chroma/`（ChromaDB 持久化目录）。
 
 ## 测试
 
 ```bash
 python test_all.py
 ```
-
-## License
-
-MIT
