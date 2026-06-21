@@ -7,6 +7,7 @@ import EditorPage from "./pages/EditorPage";
 import CharactersPage from "./pages/CharactersPage";
 import WorldPage from "./pages/WorldPage";
 import SettingsPage from "./pages/SettingsPage";
+import StylePage from "./pages/StylePage";
 import { useSettingsStore } from "./store/settings";
 import { useThemeStore } from "./store/theme";
 
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="characters" element={<CharactersPage />} />
         <Route path="world" element={<WorldPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="styles" element={<StylePage />} />
       </Route>
     </Routes>
   );

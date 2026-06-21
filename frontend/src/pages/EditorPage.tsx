@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useSettingsStore } from "../store/settings";
 
@@ -16,12 +16,15 @@ interface AgentEvent {
 
 export default function EditorPage() {
   const { novelId, sectionId } = useParams<{ novelId: string; sectionId: string }>();
+  const navigate = useNavigate();
   const settings = useSettingsStore((s) => s.settings);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<AgentEvent[]>([]);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [instruction, setInstruction] = useState("请根据大纲概要创作本节正文");
+  const [styleId, setStyleId] = useState("");
+  const [styles, setStyles] = useState<{ id: string; name: string }[]>([]);
   const loaded = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const contentRef = useRef("");
@@ -36,6 +39,7 @@ export default function EditorPage() {
         loaded.current = true;
         setSaveStatus("idle");
       });
+      api.styles.list(novelId).then(setStyles);
     }
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [novelId, sectionId]);
@@ -89,6 +93,7 @@ export default function EditorPage() {
           temperature: settings.temperature,
           max_tokens: settings.maxTokens,
           instruction: instruction,
+          style_id: styleId || undefined,
         },
         (event) => {
           const evt = event as unknown as AgentEvent;
@@ -206,6 +211,43 @@ export default function EditorPage() {
             style={{ fontSize: 13, resize: "vertical" }}
             placeholder="告诉 Agent 要做什么..."
           />
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+            文风
+          </label>
+          <div style={{ display: "flex", gap: 6 }}>
+            <select
+              value={styleId}
+              onChange={(e) => setStyleId(e.target.value)}
+              style={{ flex: 1, fontSize: 13 }}
+            >
+              <option value="">不使用文风</option>
+              {styles.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <button
+              className="btn btn-sm"
+              onClick={() => navigate(`/novel/${novelId}/styles`)}
+              style={{
+                fontSize: 12,
+                color: "#4a6cf7",
+                background: "var(--bg-card)",
+                border: "1px solid var(--border-light)",
+                borderRadius: 4,
+                whiteSpace: "nowrap",
+              }}
+            >
+              管理
+            </button>
+          </div>
+          {styles.length === 0 && (
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+              暂无文风，点击「管理」新建
+            </div>
+          )}
         </div>
 
         {loading && <p style={{ color: "#f59e0b", fontSize: 12 }}>Agent 执行中...</p>}

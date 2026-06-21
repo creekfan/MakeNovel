@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -18,6 +19,7 @@ class AgentRunParams(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 4096
     instruction: str = "请阅读当前节的大纲概要，创作正文内容"
+    style_id: Optional[str] = None
 
 
 class SummrizeRequest(BaseModel):
@@ -49,7 +51,7 @@ async def run_agent(novel_id: str, body: AgentRunParams):
 
     async def generate():
         try:
-            async for event in agent.astream(novel_id, body.section_id, body.instruction):
+            async for event in agent.astream(novel_id, body.section_id, body.instruction, body.style_id):
                 yield event
         except Exception as e:
             yield _sse({"step": "error", "status": "error", "message": str(e)})

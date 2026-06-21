@@ -125,3 +125,52 @@ def save_section_content(novel_id: str, section_id: str, content: str):
     d.mkdir(exist_ok=True)
     f = d / f"{section_id}.txt"
     f.write_text(content, encoding="utf-8")
+
+
+def _styles_dir(novel_id: str) -> Path:
+    d = _novel_dir(novel_id) / "styles"
+    d.mkdir(exist_ok=True)
+    return d
+
+
+def list_styles(novel_id: str) -> list:
+    f = _styles_dir(novel_id) / "list.json"
+    if f.exists():
+        return json.loads(f.read_text(encoding="utf-8"))
+    return []
+
+
+def get_style(novel_id: str, style_id: str) -> Optional[dict]:
+    styles = list_styles(novel_id)
+    for s in styles:
+        if s.get("id") == style_id:
+            content_f = _styles_dir(novel_id) / f"{style_id}.md"
+            s["content"] = content_f.read_text(encoding="utf-8") if content_f.exists() else ""
+            return s
+    return None
+
+
+def save_style(novel_id: str, style_id: str, name: str, content: str):
+    content_f = _styles_dir(novel_id) / f"{style_id}.md"
+    content_f.write_text(content, encoding="utf-8")
+    styles = list_styles(novel_id)
+    updated = False
+    for s in styles:
+        if s.get("id") == style_id:
+            s["name"] = name
+            updated = True
+            break
+    if not updated:
+        from datetime import datetime
+        styles.append({"id": style_id, "name": name, "created_at": datetime.now().isoformat()})
+    list_f = _styles_dir(novel_id) / "list.json"
+    list_f.write_text(json.dumps(styles, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def delete_style(novel_id: str, style_id: str):
+    content_f = _styles_dir(novel_id) / f"{style_id}.md"
+    if content_f.exists():
+        content_f.unlink()
+    styles = [s for s in list_styles(novel_id) if s.get("id") != style_id]
+    list_f = _styles_dir(novel_id) / "list.json"
+    list_f.write_text(json.dumps(styles, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -95,6 +95,26 @@ export const api = {
     delete: (novelId: string, settingId: string) =>
       request<void>(`/novels/${novelId}/world/${settingId}`, { method: "DELETE" }),
   },
+  styles: {
+    list: (novelId: string) =>
+      request<{ id: string; name: string; created_at: string }[]>(`/novels/${novelId}/styles`),
+    get: (novelId: string, styleId: string) =>
+      request<{ id: string; name: string; created_at: string; content: string }>(
+        `/novels/${novelId}/styles/${styleId}`,
+      ),
+    create: (novelId: string, name: string, content: string) =>
+      request<{ id: string; name: string; created_at: string; content: string }>(
+        `/novels/${novelId}/styles`,
+        { method: "POST", body: JSON.stringify({ name, content }) },
+      ),
+    update: (novelId: string, styleId: string, name: string, content: string) =>
+      request<{ id: string; name: string; created_at: string; content: string }>(
+        `/novels/${novelId}/styles/${styleId}`,
+        { method: "PUT", body: JSON.stringify({ name, content }) },
+      ),
+    delete: (novelId: string, styleId: string) =>
+      request<{ ok: boolean }>(`/novels/${novelId}/styles/${styleId}`, { method: "DELETE" }),
+  },
   agent: {
     run: (novelId: string, params: {
       section_id: string;
@@ -104,6 +124,7 @@ export const api = {
       temperature: number;
       max_tokens: number;
       instruction?: string;
+      style_id?: string;
     }) => request<unknown>(`/novels/${novelId}/agent/run`, { method: "POST", body: JSON.stringify(params) }),
     summarize: (novelId: string, params: {
       section_id: string;
@@ -131,6 +152,7 @@ export const api = {
         temperature: number;
         max_tokens: number;
         instruction: string;
+        style_id?: string;
       },
       onEvent: (event: Record<string, unknown>) => void,
     ) => {

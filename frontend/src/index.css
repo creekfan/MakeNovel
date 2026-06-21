@@ -351,3 +351,27 @@ textarea {
 .theme-toggle:hover {
   color: #fff;
 }
+
+.style-page {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 100px);
+}
+
+.style-list-panel {
+  width: 260px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px var(--shadow);
+  overflow-y: auto;
+}
+
+.style-editor-panel {
+  flex: 1;
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px var(--shadow);
+  overflow-y: auto;
+}

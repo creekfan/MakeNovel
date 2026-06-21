@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import novels, outlines, characters, world, agent
+from .routers import novels, outlines, characters, world, agent, style
 
 app = FastAPI(title="NovelAgent API", version="0.1.0")
 
@@ -18,6 +18,7 @@ app.include_router(outlines.router)
 app.include_router(characters.router)
 app.include_router(world.router)
 app.include_router(agent.router)
+app.include_router(style.router)
 
 
 @app.get("/api/health")

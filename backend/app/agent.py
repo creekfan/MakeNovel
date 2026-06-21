@@ -1,5 +1,5 @@
 import json
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
@@ -33,6 +33,7 @@ class NovelAgent:
         novel_id: str,
         section_id: str,
         instruction: str,
+        style_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         def _sse(data: dict) -> str:
             return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -44,7 +45,15 @@ class NovelAgent:
 
         yield _sse({"step": "init", "status": "running", "message": "构建上下文..."})
 
-        user_msg = f"## 任务\n{instruction}\n\n## 当前节\nID: {section_id}\n标题: {section_info.get('title', '')}\n概要: {section_info.get('summary', '')}\n\n"
+        user_msg = ""
+
+        if style_id:
+            style = storage.get_style(novel_id, style_id)
+            if style:
+                yield _sse({"step": "init", "status": "running", "message": f"加载文风: {style.get('name', '')}"})
+                user_msg += f"## 文风要求\n{style.get('content', '')}\n\n"
+
+        user_msg += f"## 任务\n{instruction}\n\n## 当前节\nID: {section_id}\n标题: {section_info.get('title', '')}\n概要: {section_info.get('summary', '')}\n\n"
         if existing_content:
             user_msg += f"## 已有内容（{len(existing_content)}字）\n{existing_content[:1000]}{'...' if len(existing_content) > 1000 else ''}\n"
         user_msg += "\n请先获取所需信息，然后直接创作正文。创作完成后调用 finish 工具，将正文内容作为参数传入。"
