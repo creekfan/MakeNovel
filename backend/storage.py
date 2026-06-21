@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Optional
 
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -13,7 +13,7 @@ def _novel_dir(novel_id: str) -> Path:
     return d
 
 
-def list_novels() -> list[dict]:
+def list_novels() -> List[dict]:
     result = []
     if not DATA_DIR.exists():
         return result
@@ -26,7 +26,7 @@ def list_novels() -> list[dict]:
     return result
 
 
-def get_novel(novel_id: str) -> dict | None:
+def get_novel(novel_id: str) -> Optional[dict]:
     meta_file = _novel_dir(novel_id) / "meta.json"
     if meta_file.exists():
         return json.loads(meta_file.read_text(encoding="utf-8"))
@@ -45,7 +45,7 @@ def delete_novel(novel_id: str):
         shutil.rmtree(d)
 
 
-def get_outline(novel_id: str) -> dict | None:
+def get_outline(novel_id: str) -> Optional[dict]:
     f = _novel_dir(novel_id) / "outline.json"
     if f.exists():
         return json.loads(f.read_text(encoding="utf-8"))
@@ -113,7 +113,7 @@ def update_outline_node(novel_id: str, node_id: str, updates: dict) -> bool:
     return found
 
 
-def get_section_content(novel_id: str, section_id: str) -> str | None:
+def get_section_content(novel_id: str, section_id: str) -> Optional[str]:
     f = _novel_dir(novel_id) / "sections" / f"{section_id}.txt"
     if f.exists():
         return f.read_text(encoding="utf-8")

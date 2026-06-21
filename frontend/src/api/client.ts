@@ -103,26 +103,8 @@ export const api = {
       base_url: string;
       temperature: number;
       max_tokens: number;
-    }) => request<{
-      section_id: string;
-      final_content: string;
-      draft_content: string;
-      logs: string[];
-      review_issues: unknown[];
-    }>(`/novels/${novelId}/agent/run`, { method: "POST", body: JSON.stringify(params) }),
-    single: (novelId: string, params: {
-      section_id: string;
-      api_key: string;
-      model: string;
-      base_url: string;
-      temperature: number;
-      max_tokens: number;
-      agent_name: string;
-      content?: string;
-    }) => request<{ agent: string; result: unknown }>(`/novels/${novelId}/agent/single`, {
-      method: "POST",
-      body: JSON.stringify(params),
-    }),
+      instruction?: string;
+    }) => request<unknown>(`/novels/${novelId}/agent/run`, { method: "POST", body: JSON.stringify(params) }),
     summarize: (novelId: string, params: {
       section_id: string;
       api_key: string;
@@ -135,11 +117,11 @@ export const api = {
       key_events: string[];
       character_state_changes: Record<string, string>;
       world_setting_changes: Record<string, string>;
-    }>(`/novels/${novelId}/agent/summarize`, {
+    }>(`/novels/${novelId}/agent/summrize`, {
       method: "POST",
       body: JSON.stringify(params),
     }),
-    runStream: async (
+    runAgentStream: async (
       novelId: string,
       params: {
         section_id: string;
@@ -148,10 +130,11 @@ export const api = {
         base_url: string;
         temperature: number;
         max_tokens: number;
+        instruction: string;
       },
-      onEvent: (event: { step: string; status: string; message: string; final_content?: string; detail?: Record<string, unknown> }) => void,
+      onEvent: (event: Record<string, unknown>) => void,
     ) => {
-      const res = await fetch(`${BASE}/novels/${novelId}/agent/run-stream`, {
+      const res = await fetch(`${BASE}/novels/${novelId}/agent/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
@@ -172,16 +155,14 @@ export const api = {
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             try {
-              const data = JSON.parse(line.slice(6));
-              onEvent(data);
+              onEvent(JSON.parse(line.slice(6)));
             } catch {}
           }
         }
       }
       if (buffer.startsWith("data: ")) {
         try {
-          const data = JSON.parse(buffer.slice(6));
-          onEvent(data);
+          onEvent(JSON.parse(buffer.slice(6)));
         } catch {}
       }
     },
