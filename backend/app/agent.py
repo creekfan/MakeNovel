@@ -1,19 +1,26 @@
 import json
+from datetime import datetime
 from typing import AsyncGenerator, Optional
 
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
 
 from .. import storage
-from .memory import embed_section
-from .prompts import AGENT_SYSTEM_PROMPT
-from .tools import get_all_tools
+from .pipeline import build_graph, get_saver
+
+
+def _sse(data: dict) -> str:
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _section_title(novel_id: str, section_id: str) -> str:
+    return storage.find_node_title(novel_id, section_id)
 
 
 class NovelAgent:
-    def __init__(self, api_key: str, base_url: str, model: str, temperature: float = 0.7, max_tokens: int = 4096):
+    """写作流水线 runner：plan → write → review →（revise｜polish）→ save。"""
+
+    def __init__(self, api_key: str, base_url: str, model: str, temperature: float = 0.7, max_tokens: int = 10000):
+        self.model = model
         self.llm = ChatOpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -21,131 +28,134 @@ class NovelAgent:
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        self.tools = get_all_tools()
-        self.agent = create_react_agent(
-            model=self.llm,
-            tools=self.tools,
-            prompt=AGENT_SYSTEM_PROMPT,
-        )
 
-    async def astream(
+    def _config(self, run_id: str):
+        return {"configurable": {"thread_id": run_id}, "recursion_limit": 50}
+
+    def _init_log(self, novel_id: str, run_id: str, section_id: str, instruction: str):
+        storage.save_agent_log(novel_id, run_id, {
+            "run_id": run_id,
+            "section_id": section_id,
+            "section_title": _section_title(novel_id, section_id),
+            "instruction": instruction,
+            "model": self.model,
+            "started_at": datetime.now().isoformat(),
+            "finished_at": "",
+            "status": "running",
+            "events": [],
+            "final_content": "",
+        })
+
+    def _finalize_log(self, novel_id: str, run_id: str, status: str, final: str = ""):
+        log = storage.get_agent_log(novel_id, run_id) or {}
+        log["status"] = status
+        log["finished_at"] = datetime.now().isoformat()
+        if final:
+            log["final_content"] = final
+        storage.save_agent_log(novel_id, run_id, log)
+
+    def _progress(self, chunk: dict):
+        """把一个节点更新翻译成 SSE（若有）。"""
+        events = []
+        for node, delta in chunk.items():
+            if not isinstance(delta, dict):
+                continue
+            if node == "plan":
+                events.append(_sse({"step": "plan", "status": "done", "message": "统筹计划完成", "plan": delta.get("plan", {})}))
+            elif node == "write":
+                events.append(_sse({"step": "write", "status": "done", "message": f"草稿完成（{len(delta.get('draft',''))}字）"}))
+            elif node == "review":
+                rv = delta.get("review", {})
+                events.append(_sse({"step": "review", "status": "done",
+                                    "message": f"审查完成（{len(rv.get('issues', []))}个问题）", "review": rv}))
+            elif node == "revise":
+                events.append(_sse({"step": "revise", "status": "done", "message": f"修订完成（{len(delta.get('draft',''))}字）"}))
+            elif node == "polish":
+                events.append(_sse({"step": "polish", "status": "done", "message": f"润色完成（{len(delta.get('final',''))}字）"}))
+            elif node == "save":
+                events.append(_sse({"step": "save", "status": "done", "message": "已保存"}))
+        return events
+
+    async def start_plan(
         self,
         novel_id: str,
         section_id: str,
         instruction: str,
         style_id: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
-        def _sse(data: dict) -> str:
-            return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+        run_id = f"{section_id}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        self._init_log(novel_id, run_id, section_id, instruction)
+        try:
+            saver = await get_saver()
+            graph = build_graph(self.llm, saver)
+            config = self._config(run_id)
+            initial = {
+                "novel_id": novel_id,
+                "section_id": section_id,
+                "style_id": style_id,
+                "instruction": instruction,
+                "run_id": run_id,
+            }
+            yield _sse({"step": "init", "status": "running", "message": "进入计划阶段...", "thread_id": run_id})
+            async for chunk in graph.astream(initial, config=config, stream_mode="updates"):
+                if isinstance(chunk, dict):
+                    for ev in self._progress(chunk):
+                        yield ev
+            snapshot = await graph.aget_state(config)
+            plan = (snapshot.values or {}).get("plan", {}) if snapshot else {}
+            yield _sse({"step": "await_plan", "status": "await", "thread_id": run_id,
+                        "message": "计划已生成，请确认或编辑后继续", "plan": plan})
+        except Exception as e:
+            self._finalize_log(novel_id, run_id, "error")
+            yield _sse({"step": "error", "status": "error", "message": str(e), "thread_id": run_id})
 
-        outline = storage.get_outline(novel_id) or {}
-        sections = _find_sections(outline.get("volumes", []))
-        section_info = sections.get(section_id, {})
-        existing_content = storage.get_section_content(novel_id, section_id) or ""
+    async def resume(
+        self,
+        novel_id: str,
+        thread_id: str,
+        action: str,
+        edited_plan: Optional[dict] = None,
+        edited_draft: Optional[str] = None,
+    ) -> AsyncGenerator[str, None]:
+        run_id = thread_id
+        try:
+            saver = await get_saver()
+            graph = build_graph(self.llm, saver)
+            config = self._config(run_id)
 
-        yield _sse({"step": "init", "status": "running", "message": "构建上下文..."})
+            update: dict = {}
+            if action == "confirm_plan":
+                if isinstance(edited_plan, dict):
+                    update["plan"] = edited_plan
+            elif action == "revise":
+                update["action"] = "revise"
+                if edited_draft is not None:
+                    update["draft"] = edited_draft
+            else:  # polish / go_polish
+                update["action"] = "polish"
+                if edited_draft is not None:
+                    update["draft"] = edited_draft
 
-        user_msg = ""
+            if update:
+                await graph.aupdate_state(config, update)
 
-        if style_id:
-            style = storage.get_style(novel_id, style_id)
-            if style:
-                yield _sse({"step": "init", "status": "running", "message": f"加载文风: {style.get('name', '')}"})
-                user_msg += f"## 文风要求\n{style.get('content', '')}\n\n"
+            yield _sse({"step": "resume", "status": "running", "message": f"继续：{action}", "thread_id": run_id})
+            async for chunk in graph.astream(None, config=config, stream_mode="updates"):
+                if isinstance(chunk, dict):
+                    for ev in self._progress(chunk):
+                        yield ev
 
-        user_msg += f"## 任务\n{instruction}\n\n## 当前节\nID: {section_id}\n标题: {section_info.get('title', '')}\n概要: {section_info.get('summary', '')}\n\n"
-        if existing_content:
-            user_msg += f"## 已有内容（{len(existing_content)}字）\n{existing_content[:1000]}{'...' if len(existing_content) > 1000 else ''}\n"
-        user_msg += "\n请先获取所需信息，然后直接创作正文。创作完成后调用 finish 工具，将正文内容作为参数传入。"
-
-        config = RunnableConfig(
-            configurable={"novel_id": novel_id, "section_id": section_id},
-            recursion_limit=25,
-        )
-
-        messages = [HumanMessage(content=user_msg)]
-        final_content = ""
-
-        yield _sse({"step": "agent", "status": "running", "message": "Agent 开始执行..."})
-
-        async for event in self.agent.astream_events(
-            {"messages": messages},
-            config=config,
-            version="v2",
-        ):
-            kind = event.get("event", "")
-            name = event.get("name", "")
-
-            if kind == "on_chat_model_start":
-                if name == "ChatOpenAI":
-                    yield _sse({"step": "thinking", "status": "running", "message": "思考中..."})
-
-            elif kind == "on_chat_model_end":
-                if name == "ChatOpenAI":
-                    yield _sse({"step": "thinking", "status": "done", "message": "思考完成"})
-                    msgs = event.get("data", {}).get("output", {})
-                    if isinstance(msgs, AIMessage) and msgs.content and not msgs.tool_calls:
-                        final_content = msgs.content
-
-            elif kind == "on_tool_start":
-                tool_input = event.get("data", {}).get("input", "")
-                yield _sse({
-                    "step": "tool_call",
-                    "status": "running",
-                    "tool": name,
-                    "message": f"调用工具：{name}",
-                    "input": str(tool_input)[:200],
-                })
-
-            elif kind == "on_tool_end":
-                tool_output = event.get("data", {}).get("output", "")
-                yield _sse({
-                    "step": "tool_call",
-                    "status": "done",
-                    "tool": name,
-                    "message": f"工具 {name} 执行完成",
-                })
-                if name == "finish":
-                    final_content = tool_output if isinstance(tool_output, str) else str(tool_output)
-
-        if not final_content:
-            # fallback: grab last AI message from final state
-            async for event in self.agent.astream_events(
-                {"messages": messages},
-                config=config,
-                version="v2",
-            ):
-                if event.get("event") == "on_chain_end" and event.get("name") == "LangGraph":
-                    data = event.get("data", {}).get("output", {})
-                    if isinstance(data, dict):
-                        msgs = data.get("messages", [])
-                        for m in reversed(msgs):
-                            if isinstance(m, AIMessage) and m.content and not getattr(m, "tool_calls", None):
-                                final_content = m.content
-                                break
-
-        if final_content:
-            storage.save_section_content(novel_id, section_id, final_content)
-            embed_section(novel_id, section_id, section_info.get("title", ""), final_content)
-
-        yield _sse({
-            "step": "complete",
-            "status": "done",
-            "message": "Agent 执行完成",
-            "final_content": final_content,
-        })
-
-
-def _find_sections(volumes: list) -> dict[str, dict]:
-    result = {}
-    for vol in volumes:
-        for ch in vol.get("children", []):
-            for sec in ch.get("children", []):
-                result[sec.get("id", "")] = {
-                    "title": sec.get("title", ""),
-                    "summary": sec.get("summary", ""),
-                    "status": sec.get("status", "planned"),
-                    "volume_title": vol.get("title", ""),
-                    "chapter_title": ch.get("title", ""),
-                }
-    return result
+            snapshot = await graph.aget_state(config)
+            values = (snapshot.values or {}) if snapshot else {}
+            if snapshot and snapshot.next:
+                # 仍有后续 → 停在 review 断点
+                yield _sse({"step": "await_review", "status": "await", "thread_id": run_id,
+                            "message": "草稿与审查已完成，请选择修订或润色",
+                            "draft": values.get("draft", ""), "review": values.get("review", {})})
+            else:
+                final = values.get("final", "") or values.get("draft", "")
+                self._finalize_log(novel_id, run_id, "done", final)
+                yield _sse({"step": "complete", "status": "done", "message": "流水线完成", "final_content": final})
+        except Exception as e:
+            self._finalize_log(novel_id, run_id, "error")
+            yield _sse({"step": "error", "status": "error", "message": str(e), "thread_id": run_id})

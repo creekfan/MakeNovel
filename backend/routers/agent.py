@@ -11,15 +11,27 @@ from .. import storage
 router = APIRouter(prefix="/api/novels/{novel_id}/agent", tags=["agent"])
 
 
-class AgentRunParams(BaseModel):
+class PlanParams(BaseModel):
     section_id: str
     api_key: str
     model: str = "deepseek-chat"
     base_url: str = "https://api.deepseek.com"
     temperature: float = 0.7
-    max_tokens: int = 4096
-    instruction: str = "请阅读当前节的大纲概要，创作正文内容"
+    max_tokens: int = 10000
+    instruction: str = "请根据本节大纲概要统筹并创作正文"
     style_id: Optional[str] = None
+
+
+class ResumeParams(BaseModel):
+    thread_id: str
+    action: str  # confirm_plan | revise | polish
+    api_key: str
+    model: str = "deepseek-chat"
+    base_url: str = "https://api.deepseek.com"
+    temperature: float = 0.7
+    max_tokens: int = 10000
+    edited_plan: Optional[dict] = None
+    edited_draft: Optional[str] = None
 
 
 class SummrizeRequest(BaseModel):
@@ -34,14 +46,9 @@ def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-@router.post("/run")
-async def run_agent(novel_id: str, body: AgentRunParams):
-    if not body.api_key:
-        raise HTTPException(400, "API Key is required")
-
+def _make_agent(body):
     from ..app.agent import NovelAgent
-
-    agent = NovelAgent(
+    return NovelAgent(
         api_key=body.api_key,
         base_url=body.base_url,
         model=body.model,
@@ -49,9 +56,32 @@ async def run_agent(novel_id: str, body: AgentRunParams):
         max_tokens=body.max_tokens,
     )
 
+
+@router.post("/plan")
+async def start_plan(novel_id: str, body: PlanParams):
+    if not body.api_key:
+        raise HTTPException(400, "API Key is required")
+    agent = _make_agent(body)
+
     async def generate():
         try:
-            async for event in agent.astream(novel_id, body.section_id, body.instruction, body.style_id):
+            async for event in agent.start_plan(novel_id, body.section_id, body.instruction, body.style_id):
+                yield event
+        except Exception as e:
+            yield _sse({"step": "error", "status": "error", "message": str(e)})
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@router.post("/resume")
+async def resume_pipeline(novel_id: str, body: ResumeParams):
+    if not body.api_key:
+        raise HTTPException(400, "API Key is required")
+    agent = _make_agent(body)
+
+    async def generate():
+        try:
+            async for event in agent.resume(novel_id, body.thread_id, body.action, body.edited_plan, body.edited_draft):
                 yield event
         except Exception as e:
             yield _sse({"step": "error", "status": "error", "message": str(e)})
@@ -131,3 +161,22 @@ async def summarize(novel_id: str, body: SummrizeRequest):
         "character_state_changes": character_state,
         "world_setting_changes": world_state,
     }
+
+
+@router.get("/logs")
+def list_logs(novel_id: str):
+    return storage.list_agent_logs(novel_id)
+
+
+@router.get("/logs/{run_id}")
+def get_log(novel_id: str, run_id: str):
+    log = storage.get_agent_log(novel_id, run_id)
+    if log is None:
+        raise HTTPException(404, "Log not found")
+    return log
+
+
+@router.delete("/logs/{run_id}")
+def delete_log(novel_id: str, run_id: str):
+    storage.delete_agent_log(novel_id, run_id)
+    return {"ok": True}

@@ -2,14 +2,14 @@
 
 ## Project Overview
 
-AI-powered novel writing tool with multi-agent pipeline (prepare → create → review → revise → polish).
-Three-tier architecture: Python agents (`Agent/`), FastAPI backend (`backend/`), React+Vite frontend (`frontend/`).
+AI-powered novel writing tool. The backend drives a LangGraph ReAct agent (`backend/app/agent.py`) that writes section content using tools (outline/characters/world/summaries/RAG memory).
+Two-tier architecture: FastAPI backend (`backend/`), React+Vite frontend (`frontend/`).
 
 ---
 
 ## Build / Lint / Test Commands
 
-### Python (Agent + Backend)
+### Python (Backend)
 
 ```bash
 # Run all tests (backend API integration tests, 24 cases)
@@ -17,9 +17,6 @@ python test_all.py
 
 # Run backend manually
 uvicorn backend.main:app --host 0.0.0.0 --port 8001 --reload
-
-# Run Agent pipeline (CLI)
-novel-agent run --section sec-1 --outline sample_data/outline.json ...
 ```
 
 There is no pytest, no linter config (no ruff/black/flake8), no type checker config. The test suite is a single `test_all.py` script using `fastapi.testclient.TestClient`.
@@ -120,7 +117,7 @@ import { useThemeStore } from "../store/theme";
 ### General
 
 **No linting/formatting tools are configured.** Code should match the existing style of the file being edited.
-- *Python:* Follow patterns in `backend/routers/`, `Agent/makenovel_agent/`, `backend/storage.py`
+- *Python:* Follow patterns in `backend/routers/`, `backend/app/`, `backend/storage.py`
 - *TypeScript:* Follow patterns in `frontend/src/`
 
 **Testing:** All tests live in `test_all.py` (backend integration). No unit tests exist for the Agent or frontend. Test pattern: define `test(name, fn)` wrapper, use `fastapi.testclient.TestClient`, print PASS/FAIL manually.

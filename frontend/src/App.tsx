@@ -8,6 +8,9 @@ import CharactersPage from "./pages/CharactersPage";
 import WorldPage from "./pages/WorldPage";
 import SettingsPage from "./pages/SettingsPage";
 import StylePage from "./pages/StylePage";
+import CanvasPage from "./pages/CanvasPage";
+import EventsPage from "./pages/EventsPage";
+import AgentLogsPage from "./pages/AgentLogsPage";
 import { useSettingsStore } from "./store/settings";
 import { useThemeStore } from "./store/theme";
 
@@ -25,6 +28,9 @@ export default function App() {
         <Route path="editor/:sectionId" element={<EditorPage />} />
         <Route path="characters" element={<CharactersPage />} />
         <Route path="world" element={<WorldPage />} />
+        <Route path="events" element={<EventsPage />} />
+        <Route path="canvas/:nodeId" element={<CanvasPage />} />
+        <Route path="logs" element={<AgentLogsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="styles" element={<StylePage />} />
       </Route>

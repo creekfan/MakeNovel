@@ -22,7 +22,9 @@ export default function NovelLayout() {
           <NavLink to={`/novel/${novelId}/outline`}>大纲目录</NavLink>
           <NavLink to={`/novel/${novelId}/characters`}>角色卡片</NavLink>
           <NavLink to={`/novel/${novelId}/world`}>世界观设定</NavLink>
+          <NavLink to={`/novel/${novelId}/events`}>事件</NavLink>
           <NavLink to={`/novel/${novelId}/styles`}>文风</NavLink>
+          <NavLink to={`/novel/${novelId}/logs`}>运行日志</NavLink>
           <NavLink to={`/novel/${novelId}/settings`}>模型设置</NavLink>
           <NavLink to="/" style={{ marginTop: "auto", opacity: 0.6 }}>
             ← 返回首页

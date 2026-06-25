@@ -12,12 +12,14 @@ function NodeItem({
   onDelete,
   onNavigate,
   onInsertAfter,
+  onCanvas,
 }: {
   node: OutlineNode;
   onUpdate: (updated: OutlineNode) => void;
   onDelete: () => void;
   onNavigate: (sectionId: string) => void;
   onInsertAfter: () => void;
+  onCanvas: (nodeId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -119,6 +121,17 @@ function NodeItem({
           </button>
         )}
         <button
+          className="btn btn-sm"
+          style={{ background: "#0ea5e9", color: "#fff" }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onCanvas(node.id);
+          }}
+          title="打开该节点的画板"
+        >
+          画板
+        </button>
+        <button
           className="btn btn-secondary btn-sm"
           onClick={(e) => {
             e.stopPropagation();
@@ -190,6 +203,7 @@ function NodeItem({
               onDelete={() => deleteChild(idx)}
               onNavigate={onNavigate}
               onInsertAfter={() => insertChildAfter(idx)}
+              onCanvas={onCanvas}
             />
           ))}
         </div>
@@ -297,6 +311,11 @@ export default function OutlinePage() {
     doSave(outline).then(() => navigate(`/novel/${novelId}/editor/${sectionId}`));
   };
 
+  const goToCanvas = (id: string) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    doSave(outline).then(() => navigate(`/novel/${novelId}/canvas/${id}`));
+  };
+
   const statusLabel: Record<SaveStatus, { text: string; color: string }> = {
     idle: { text: "", color: "transparent" },
     unsaved: { text: "未保存", color: "#f59e0b" },
@@ -335,6 +354,7 @@ export default function OutlinePage() {
             onDelete={() => deleteVolume(idx)}
             onNavigate={goToEditor}
             onInsertAfter={() => insertVolumeAfter(idx)}
+            onCanvas={goToCanvas}
           />
         ))}
       </div>

@@ -6,17 +6,18 @@ from langchain_core.callbacks import CallbackManagerForToolRun
 from .. import storage
 
 
-class GetOutlineInput(BaseModel):
-    novel_id: str = Field(description="小说 ID")
+class _NoArgs(BaseModel):
+    pass
 
 
 class GetOutlineTool(BaseTool):
     name: str = "get_outline"
-    description: str = "获取完整的小说大纲结构（卷→章→节）"
-    args_schema: Type[BaseModel] = GetOutlineInput
+    description: str = "获取当前小说的完整大纲结构（卷→章→节）。无需任何参数，直接调用。"
+    args_schema: Type[BaseModel] = _NoArgs
+    novel_id: str = ""
 
-    def _run(self, novel_id: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
-        data = storage.get_outline(novel_id)
+    def _run(self, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
+        data = storage.get_outline(self.novel_id)
         if not data:
             return "暂无大纲"
         lines = [f"小说：{data.get('novel_title', '')}"]
@@ -37,17 +38,14 @@ class GetOutlineTool(BaseTool):
         return "\n".join(lines)
 
 
-class GetCharactersInput(BaseModel):
-    novel_id: str = Field(description="小说 ID")
-
-
 class GetCharactersTool(BaseTool):
     name: str = "get_characters"
-    description: str = "获取小说中的角色档案列表"
-    args_schema: Type[BaseModel] = GetCharactersInput
+    description: str = "获取当前小说的角色档案列表。无需任何参数，直接调用。"
+    args_schema: Type[BaseModel] = _NoArgs
+    novel_id: str = ""
 
-    def _run(self, novel_id: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
-        chars = storage.get_characters(novel_id)
+    def _run(self, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
+        chars = storage.get_characters(self.novel_id)
         if not chars:
             return "暂无角色"
         lines = ["角色列表："]
@@ -74,17 +72,14 @@ class GetCharactersTool(BaseTool):
         return "\n".join(lines)
 
 
-class GetWorldSettingsInput(BaseModel):
-    novel_id: str = Field(description="小说 ID")
-
-
 class GetWorldSettingsTool(BaseTool):
     name: str = "get_world_settings"
-    description: str = "获取小说的世界观设定列表"
-    args_schema: Type[BaseModel] = GetWorldSettingsInput
+    description: str = "获取当前小说的世界观设定列表。无需任何参数，直接调用。"
+    args_schema: Type[BaseModel] = _NoArgs
+    novel_id: str = ""
 
-    def _run(self, novel_id: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
-        settings = storage.get_world_settings(novel_id)
+    def _run(self, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
+        settings = storage.get_world_settings(self.novel_id)
         if not settings:
             return "暂无世界观设定"
         lines = ["世界观设定列表："]
@@ -97,17 +92,14 @@ class GetWorldSettingsTool(BaseTool):
         return "\n".join(lines)
 
 
-class GetSummariesInput(BaseModel):
-    novel_id: str = Field(description="小说 ID")
-
-
 class GetSummariesTool(BaseTool):
     name: str = "get_summaries"
-    description: str = "获取小说各节的摘要汇总"
-    args_schema: Type[BaseModel] = GetSummariesInput
+    description: str = "获取当前小说各节的摘要汇总。无需任何参数，直接调用。"
+    args_schema: Type[BaseModel] = _NoArgs
+    novel_id: str = ""
 
-    def _run(self, novel_id: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
-        summaries = storage.get_summaries(novel_id)
+    def _run(self, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
+        summaries = storage.get_summaries(self.novel_id)
         if not summaries:
             return "暂无摘要"
         lines = ["前文摘要："]
@@ -120,18 +112,18 @@ class GetSummariesTool(BaseTool):
 
 
 class SearchMemoryInput(BaseModel):
-    novel_id: str = Field(description="小说 ID")
     query: str = Field(description="搜索查询文本")
 
 
 class SearchMemoryTool(BaseTool):
     name: str = "search_memory"
-    description: str = "在已写内容中搜索与指定查询语义相关的内容（RAG 记忆检索）"
+    description: str = "在当前小说已写内容中检索与 query 语义相关的内容（RAG 记忆检索）。只需传入 query。"
     args_schema: Type[BaseModel] = SearchMemoryInput
+    novel_id: str = ""
 
-    def _run(self, novel_id: str, query: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
+    def _run(self, query: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
         from .memory import search_sections
-        results = search_sections(novel_id, query, top_k=3)
+        results = search_sections(self.novel_id, query, top_k=3)
         if not results:
             return "未找到相关内容"
         lines = ["相关前文检索结果："]
@@ -156,12 +148,12 @@ class FinishTool(BaseTool):
         return result
 
 
-def get_all_tools() -> list[BaseTool]:
+def get_all_tools(novel_id: str) -> list[BaseTool]:
     return [
-        GetOutlineTool(),
-        GetCharactersTool(),
-        GetWorldSettingsTool(),
-        GetSummariesTool(),
-        SearchMemoryTool(),
+        GetOutlineTool(novel_id=novel_id),
+        GetCharactersTool(novel_id=novel_id),
+        GetWorldSettingsTool(novel_id=novel_id),
+        GetSummariesTool(novel_id=novel_id),
+        SearchMemoryTool(novel_id=novel_id),
         FinishTool(),
     ]

@@ -77,7 +77,7 @@ export default function SettingsPage() {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button className="btn btn-primary" onClick={handleSave}>保存设置</button>
-          <button className="btn btn-danger" onClick={() => { clear(); setForm({ apiKey: "", model: "deepseek-chat", baseUrl: "https://api.deepseek.com", temperature: 0.7, maxTokens: 4096 }); }}>
+          <button className="btn btn-danger" onClick={() => { clear(); setForm({ apiKey: "", model: "deepseek-chat", baseUrl: "https://api.deepseek.com", temperature: 0.7, maxTokens: 10000 }); }}>
             清除设置
           </button>
         </div>

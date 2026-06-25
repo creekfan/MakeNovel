@@ -110,7 +110,7 @@ export default function CharactersPage() {
           </div>
           <div className="form-group">
             <label>角色弧光</label>
-            <input type="text" value={form.arc || ""} onChange={(e) => setForm({ ...form, arc: e.target.value })} />
+            <textarea value={form.arc || ""} onChange={(e) => setForm({ ...form, arc: e.target.value })} rows={4} />
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-primary" onClick={saveChar}>保存</button>

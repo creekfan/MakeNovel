@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS: LLMSettings = {
   model: "deepseek-chat",
   baseUrl: "https://api.deepseek.com",
   temperature: 0.7,
-  maxTokens: 4096,
+  maxTokens: 10000,
 };
 
 function encodeSettings(s: LLMSettings): string {
