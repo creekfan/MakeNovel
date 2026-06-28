@@ -96,7 +96,10 @@ async def summarize(novel_id: str, body: SummrizeRequest):
     if not body.content.strip():
         raise HTTPException(400, "Content is empty")
 
-    from langchain_openai import ChatOpenAI
+    try:
+        from langchain_openai import ChatOpenAI
+    except ImportError:
+        raise HTTPException(500, "langchain_openai not installed")
 
     llm = ChatOpenAI(
         api_key=body.api_key,
@@ -109,17 +112,29 @@ async def summarize(novel_id: str, body: SummrizeRequest):
     skills_dir = Path(__file__).resolve().parents[1] / "app" / "skills"
     summary_skill = (skills_dir / "summary.md").read_text(encoding="utf-8") if (skills_dir / "summary.md").exists() else ""
 
-    result = await llm.ainvoke([
-        {"role": "system", "content": summary_skill or "你是小说摘要助手，生成JSON格式摘要。"},
-        {"role": "user", "content": body.content},
-    ])
+    try:
+        result = await llm.ainvoke([
+            {"role": "system", "content": summary_skill or "你是小说摘要助手，生成JSON格式摘要。"},
+            {"role": "user", "content": body.content},
+        ])
+    except Exception as e:
+        raise HTTPException(502, f"LLM call failed: {e}")
 
     try:
         parsed = json.loads(result.content)
     except (json.JSONDecodeError, AttributeError):
-        parsed = {"summary": result.content if hasattr(result, "content") else str(result), "key_events": [], "character_state_changes": {}, "world_setting_changes": {}}
+        content_str = result.content if hasattr(result, "content") else str(result)
+        start = content_str.find("{")
+        end = content_str.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                parsed = json.loads(content_str[start:end + 1])
+            except json.JSONDecodeError:
+                parsed = {"summary": content_str, "key_events": [], "character_state_changes": {}, "world_setting_changes": {}}
+        else:
+            parsed = {"summary": content_str, "key_events": [], "character_state_changes": {}, "world_setting_changes": {}}
 
-    summary_text = parsed.get("summary", "")
+    summary_text = parsed.get("detailed_summary") or parsed.get("summary", "")
     key_events = parsed.get("key_events", [])
     character_state = parsed.get("character_state_changes", {})
     world_state = parsed.get("world_setting_changes", {})
@@ -151,6 +166,12 @@ async def summarize(novel_id: str, body: SummrizeRequest):
         "key_events": key_events,
         "character_state_changes": character_state,
         "world_setting_changes": world_state,
+        "scene_breakdown": parsed.get("scene_breakdown", []),
+        "characters_summary": parsed.get("characters_summary", {}),
+        "objects_of_interest": parsed.get("objects_of_interest", []),
+        "new_elements_introduced": parsed.get("new_elements_introduced", []),
+        "conflicts_and_tensions": parsed.get("conflicts_and_tensions", []),
+        "unresolved_hooks": parsed.get("unresolved_hooks", []),
     })
     storage.save_summaries(novel_id, summaries)
 
@@ -160,6 +181,12 @@ async def summarize(novel_id: str, body: SummrizeRequest):
         "key_events": key_events,
         "character_state_changes": character_state,
         "world_setting_changes": world_state,
+        "scene_breakdown": parsed.get("scene_breakdown", []),
+        "characters_summary": parsed.get("characters_summary", {}),
+        "objects_of_interest": parsed.get("objects_of_interest", []),
+        "new_elements_introduced": parsed.get("new_elements_introduced", []),
+        "conflicts_and_tensions": parsed.get("conflicts_and_tensions", []),
+        "unresolved_hooks": parsed.get("unresolved_hooks", []),
     }
 
 
