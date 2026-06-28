@@ -86,3 +86,12 @@ def delete_novel_sections(novel_id: str):
         client.delete_collection(name=collection_name)
     except ValueError:
         pass
+
+
+def delete_section_embedding(novel_id: str, section_id: str):
+    try:
+        collection = _get_collection(novel_id)
+        if collection and collection.count() > 0:
+            collection.delete(ids=[section_id])
+    except Exception:
+        pass

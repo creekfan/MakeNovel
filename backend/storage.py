@@ -302,3 +302,35 @@ def delete_agent_log(novel_id: str, run_id: str):
     f = _novel_dir(novel_id) / "logs" / f"{run_id}.json"
     if f.exists():
         f.unlink()
+
+
+def delete_section_summaries(novel_id: str, section_ids: set):
+    summaries = get_summaries(novel_id)
+    if not summaries:
+        return
+    filtered = [s for s in summaries if s.get("section_id") not in section_ids]
+    if len(filtered) != len(summaries):
+        save_summaries(novel_id, filtered)
+
+
+def delete_section_files(novel_id: str, section_ids: set):
+    for sid in section_ids:
+        f = _novel_dir(novel_id) / "sections" / f"{sid}.txt"
+        if f.exists():
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+
+def delete_canvas_nodes(novel_id: str, node_ids: set):
+    d = _novel_dir(novel_id) / "canvas"
+    if not d.exists():
+        return
+    for nid in node_ids:
+        f = d / f"{nid}.json"
+        if f.exists():
+            try:
+                f.unlink()
+            except OSError:
+                pass

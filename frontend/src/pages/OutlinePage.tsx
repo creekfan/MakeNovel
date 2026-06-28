@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { api, OutlineTree, OutlineNode } from "../api/client";
 
 function generateId() {
@@ -219,6 +219,7 @@ export default function OutlinePage() {
   const navigate = useNavigate();
   const [outline, setOutline] = useState<OutlineTree | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const { openAssistant } = useOutletContext<{ openAssistant: () => void }>();
   const loaded = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -342,6 +343,9 @@ export default function OutlinePage() {
           <button className="btn btn-primary" onClick={manualSave}>
             保存大纲
           </button>
+          <button className="btn" style={{ background: "#8b5cf6", color: "#fff" }} onClick={() => openAssistant()}>
+            大纲助手
+          </button>
         </div>
       </div>
       <div className="card outline-tree">
@@ -358,6 +362,7 @@ export default function OutlinePage() {
           />
         ))}
       </div>
+
     </div>
   );
 }

@@ -211,6 +211,16 @@ export const api = {
         method: "PUT",
         body: JSON.stringify({ content }),
       }),
+    assistant: (novelId: string, params: {
+      messages: { role: "user" | "assistant"; content: string }[];
+      api_key: string;
+      model: string;
+      base_url: string;
+      temperature: number;
+    }) => request<{ reply: string }>(`/novels/${novelId}/outline/assistant`, {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
   },
   characters: {
     get: (novelId: string) => request<Character[]>(`/novels/${novelId}/characters`),

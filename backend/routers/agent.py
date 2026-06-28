@@ -103,7 +103,7 @@ async def summarize(novel_id: str, body: SummrizeRequest):
         base_url=body.base_url,
         model=body.model,
         temperature=0.3,
-        max_tokens=1024,
+        max_tokens=4096,
     )
 
     skills_dir = Path(__file__).resolve().parents[1] / "app" / "skills"

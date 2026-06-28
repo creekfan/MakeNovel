@@ -113,6 +113,42 @@ test("GET outline (verify)", test_get_outline_saved)
 
 # ─── 4. Section Content ───
 print("\n--- 4. Section Content ---")
+
+def test_outline_delete_cascades():
+    """删除大纲节时级联清除：正文内容、摘要、画板"""
+    # 临时添加一节到现有大纲
+    outline = client.get(f"/api/novels/{novel_id}/outline").json()
+    outline["volumes"][0]["children"][0]["children"].append({
+        "id": "sec-cleanup", "title": "临时节", "node_type": "section",
+        "summary": "测试", "status": "planned", "children": [], "sort_order": 99
+    })
+    r = client.put(f"/api/novels/{novel_id}/outline", json=outline)
+    assert r.status_code == 200
+    # 写入 body
+    client.put(f"/api/novels/{novel_id}/outline/section/sec-cleanup/content", json={"content":"临时正文"})
+    assert len(client.get(f"/api/novels/{novel_id}/outline/section/sec-cleanup/content").json()["content"]) > 0
+    # 写入 summary
+    summaries = client.get(f"/api/novels/{novel_id}/summaries").json() if hasattr(client.get(f"/api/novels/{novel_id}/summaries"), "json") else {}
+    # 直接用 storage 写入 summary
+    from backend import storage as st
+    ss = st.get_summaries(novel_id)
+    ss.append({"section_id": "sec-cleanup", "section_title": "临时节", "summary": "test summary"})
+    st.save_summaries(novel_id, ss)
+    assert any(s["section_id"] == "sec-cleanup" for s in st.get_summaries(novel_id))
+    # 画板
+    st.save_canvas(novel_id, "sec-cleanup", {"node_id":"sec-cleanup","nodes":[{"placement_id":"px","entity_type":"event","entity_id":"ev-1","x":0,"y":0}],"edges":[]})
+    assert len(st.get_canvas(novel_id, "sec-cleanup")["nodes"]) == 1
+    # 删除：重新保存不含该节的大纲
+    outline["volumes"][0]["children"][0]["children"] = [c for c in outline["volumes"][0]["children"][0]["children"] if c["id"] != "sec-cleanup"]
+    r = client.put(f"/api/novels/{novel_id}/outline", json=outline)
+    assert r.status_code == 200
+    # 验证正文已清
+    assert client.get(f"/api/novels/{novel_id}/outline/section/sec-cleanup/content").json()["content"] == ""
+    # 验证摘要已清
+    assert not any(s["section_id"] == "sec-cleanup" for s in st.get_summaries(novel_id))
+    # 验证画板已清（回到默认空）
+    assert len(st.get_canvas(novel_id, "sec-cleanup")["nodes"]) == 0
+test("Outline delete cascades: content + summary + canvas cleanup", test_outline_delete_cascades)
 def test_save_content():
     r = client.put(f"/api/novels/{novel_id}/outline/section/sec-1-1/content",
                    json={"content": "It was a dark and stormy night..."})
@@ -130,6 +166,28 @@ def test_get_empty_content():
     assert r.status_code == 200
     assert r.json()["content"] == ""
 test("GET empty content", test_get_empty_content)
+
+def test_outline_assistant_no_key():
+    r = client.post(f"/api/novels/{novel_id}/outline/assistant", json={
+        "messages": [{"role": "user", "content": "hi"}],
+        "api_key": "",
+        "model": "deepseek-chat",
+        "base_url": "https://api.deepseek.com",
+        "temperature": 0.7,
+    })
+    assert r.status_code == 400
+test("POST outline/assistant (empty key => 400)", test_outline_assistant_no_key)
+
+def test_outline_assistant_empty_msgs():
+    r = client.post(f"/api/novels/{novel_id}/outline/assistant", json={
+        "messages": [],
+        "api_key": "sk-test",
+        "model": "deepseek-chat",
+        "base_url": "https://api.deepseek.com",
+        "temperature": 0.7,
+    })
+    assert r.status_code == 400
+test("POST outline/assistant (empty messages => 400)", test_outline_assistant_empty_msgs)
 
 # ─── 5. Characters ───
 print("\n--- 5. Characters CRUD ---")
