@@ -7,6 +7,13 @@ DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 
+def _safe_load_json(filepath: Path, default=None):
+    try:
+        return json.loads(filepath.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, FileNotFoundError, OSError):
+        return default
+
+
 def _novel_dir(novel_id: str) -> Path:
     return DATA_DIR / novel_id
 
@@ -25,7 +32,7 @@ def list_novels() -> List[dict]:
         if p.is_dir():
             meta_file = p / "meta.json"
             if meta_file.exists():
-                meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                meta = _safe_load_json(meta_file)
                 result.append(meta)
     return result
 
@@ -33,7 +40,7 @@ def list_novels() -> List[dict]:
 def get_novel(novel_id: str) -> Optional[dict]:
     meta_file = _novel_dir(novel_id) / "meta.json"
     if meta_file.exists():
-        return json.loads(meta_file.read_text(encoding="utf-8"))
+        return _safe_load_json(meta_file)
     return None
 
 
@@ -52,7 +59,7 @@ def delete_novel(novel_id: str):
 def get_outline(novel_id: str) -> Optional[dict]:
     f = _novel_dir(novel_id) / "outline.json"
     if f.exists():
-        return json.loads(f.read_text(encoding="utf-8"))
+        return _safe_load_json(f, default=None)
     return None
 
 
@@ -64,7 +71,7 @@ def save_outline(novel_id: str, data: dict):
 def get_characters(novel_id: str) -> list:
     f = _novel_dir(novel_id) / "characters.json"
     if f.exists():
-        return json.loads(f.read_text(encoding="utf-8"))
+        return _safe_load_json(f, default=None)
     return []
 
 
@@ -76,7 +83,7 @@ def save_characters(novel_id: str, data: list):
 def get_world_settings(novel_id: str) -> list:
     f = _novel_dir(novel_id) / "world_settings.json"
     if f.exists():
-        return json.loads(f.read_text(encoding="utf-8"))
+        return _safe_load_json(f, default=None)
     return []
 
 
@@ -88,7 +95,7 @@ def save_world_settings(novel_id: str, data: list):
 def get_summaries(novel_id: str) -> list:
     f = _novel_dir(novel_id) / "summaries.json"
     if f.exists():
-        return json.loads(f.read_text(encoding="utf-8"))
+        return _safe_load_json(f, default=None)
     return []
 
 
@@ -140,7 +147,7 @@ def _styles_dir(novel_id: str) -> Path:
 def list_styles(novel_id: str) -> list:
     f = _styles_dir(novel_id) / "list.json"
     if f.exists():
-        return json.loads(f.read_text(encoding="utf-8"))
+        return _safe_load_json(f, default=None)
     return []
 
 
@@ -183,7 +190,7 @@ def delete_style(novel_id: str, style_id: str):
 def get_snapshots(novel_id: str) -> list:
     f = _novel_dir(novel_id) / "snapshots.json"
     if f.exists():
-        return json.loads(f.read_text(encoding="utf-8"))
+        return _safe_load_json(f, default=None)
     return []
 
 
@@ -195,7 +202,7 @@ def save_snapshots(novel_id: str, data: list):
 def get_events(novel_id: str) -> list:
     f = _novel_dir(novel_id) / "events.json"
     if f.exists():
-        return json.loads(f.read_text(encoding="utf-8"))
+        return _safe_load_json(f, default=None)
     return []
 
 
@@ -213,7 +220,7 @@ def _canvas_dir(novel_id: str) -> Path:
 def get_canvas(novel_id: str, node_id: str) -> dict:
     f = _canvas_dir(novel_id) / f"{node_id}.json"
     if f.exists():
-        return json.loads(f.read_text(encoding="utf-8"))
+        return _safe_load_json(f, default=None)
     return {"node_id": node_id, "nodes": [], "edges": [], "viewport": None}
 
 
@@ -230,7 +237,7 @@ def iter_canvases(novel_id: str) -> list:
     for p in d.iterdir():
         if p.is_file() and p.suffix == ".json":
             try:
-                result.append(json.loads(p.read_text(encoding="utf-8")))
+                result.append(_safe_load_json(p))
             except json.JSONDecodeError:
                 continue
     return result
@@ -267,7 +274,7 @@ def save_agent_log(novel_id: str, run_id: str, data: dict):
 def get_agent_log(novel_id: str, run_id: str) -> Optional[dict]:
     f = _logs_dir(novel_id) / f"{run_id}.json"
     if f.exists():
-        return json.loads(f.read_text(encoding="utf-8"))
+        return _safe_load_json(f, default=None)
     return None
 
 
@@ -279,7 +286,7 @@ def list_agent_logs(novel_id: str) -> List[dict]:
     for p in d.iterdir():
         if p.is_file() and p.suffix == ".json":
             try:
-                log = json.loads(p.read_text(encoding="utf-8"))
+                log = _safe_load_json(p)
             except json.JSONDecodeError:
                 continue
             result.append({
